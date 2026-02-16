@@ -3,6 +3,7 @@
 import { JSX, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import Image from "next/image";
 
 export default function LoginPage(): JSX.Element {
   const router = useRouter();
@@ -25,59 +26,72 @@ export default function LoginPage(): JSX.Element {
   }
 
   return (
-    <main className="min-h-screen grid place-items-center bg-ikkimo-bg px-6 text-ikkimo-text">
-      <form
-        onSubmit={onSubmit}
-        className="w-full max-w-md rounded-2xl border border-ikkimo-border bg-white p-6"
-      >
-        <div className="flex items-center gap-3">
-          <div className="h-3 w-3 rounded-full bg-ikkimo-brand" />
-          <h1 className="text-lg font-semibold">iKKim’O Payroll</h1>
+    <>
+      <header>
+        <div className="flex flex-col items-center gap-4 mb-6">
+          <Image
+            src="/ikkimo_logo.png"
+            alt="iKKim’O logo"
+            width={160}
+            height={60}
+            priority
+          />
         </div>
-
-        <p className="mt-2 text-sm text-ikkimo-text/75">
-          Sign in to access the internal payroll calculator.
-        </p>
-
-        <div className="mt-6 space-y-4">
-          <div>
-            <label className="text-xs font-medium">Email</label>
-            <input
-              className="mt-1 w-full rounded-xl border border-ikkimo-border px-3 py-2 text-sm outline-none focus:border-ikkimo-brand"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
+      </header>
+      <main className="min-h-screen grid place-items-center bg-ikkimo-bg px-6 text-ikkimo-text">
+        <form
+          onSubmit={onSubmit}
+          className="w-full max-w-md rounded-2xl border border-ikkimo-border bg-white p-6"
+        >
+          <div className="flex items-center gap-3">
+            <div className="h-3 w-3 rounded-full bg-ikkimo-brand" />
+            <h1 className="text-lg font-semibold">iKKim’O Payroll</h1>
           </div>
 
-          <div>
-            <label className="text-xs font-medium">Password</label>
-            <input
-              className="mt-1 w-full rounded-xl border border-ikkimo-border px-3 py-2 text-sm outline-none focus:border-ikkimo-brand"
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
+          <p className="mt-2 text-sm text-ikkimo-text/75">
+            Sign in to access the internal payroll calculator.
+          </p>
 
-          {msg ? (
-            <div className="rounded-xl border border-ikkimo-brand/30 bg-ikkimo-brand/10 px-3 py-2 text-sm">
-              {msg}
+          <div className="mt-6 space-y-4">
+            <div>
+              <label className="text-xs font-medium">Email</label>
+              <input
+                className="mt-1 w-full rounded-xl border border-ikkimo-border px-3 py-2 text-sm outline-none focus:border-ikkimo-brand"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
             </div>
-          ) : null}
 
-          <button
-            disabled={loading}
-            className="w-full rounded-xl bg-ikkimo-brand py-2 text-sm font-medium text-white disabled:opacity-60"
-          >
-            {loading ? "…" : "Sign in"}
-          </button>
-        </div>
-      </form>
-    </main>
+            <div>
+              <label className="text-xs font-medium">Password</label>
+              <input
+                className="mt-1 w-full rounded-xl border border-ikkimo-border px-3 py-2 text-sm outline-none focus:border-ikkimo-brand"
+                type="password"
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+
+            {msg ? (
+              <div className="rounded-xl border border-ikkimo-brand/30 bg-ikkimo-brand/10 px-3 py-2 text-sm">
+                {msg}
+              </div>
+            ) : null}
+
+            <button
+              disabled={loading}
+              className="w-full rounded-xl bg-ikkimo-brand py-2 text-sm font-medium text-white disabled:opacity-60"
+            >
+              {loading ? "…" : "Sign in"}
+            </button>
+          </div>
+        </form>
+      </main>
+    </>
   );
 }
