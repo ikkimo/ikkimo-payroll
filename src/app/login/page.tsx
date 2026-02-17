@@ -22,7 +22,7 @@ export default function LoginPage() {
     setLoading(false);
     if (error) return setMsg(error.message);
 
-    router.push("/dashboard");
+    router.push("/home");
   }
 
   return (
@@ -78,20 +78,10 @@ export default function LoginPage() {
               </div>
             ) : null}
 
-            {/* Guaranteed visible button (no dependency on Tailwind color tokens) */}
             <button
               type="submit"
               disabled={loading}
-              style={{
-                backgroundColor: "rgb(125, 7, 5)",
-                color: "white",
-                width: "100%",
-                borderRadius: "12px",
-                padding: "10px 12px",
-                fontWeight: 600,
-                cursor: loading ? "not-allowed" : "pointer",
-                opacity: loading ? 0.6 : 1,
-              }}
+              className="mt-4 w-full rounded-xl bg-[color:var(--ikkimo-brand)] py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
             >
               {loading ? "…" : "Sign in"}
             </button>
