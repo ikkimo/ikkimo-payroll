@@ -374,3 +374,94 @@ check (employee_code ~ '^[A-Za-z0-9]{3,12}$');
 update public.employees
 set internal_no = null
 where internal_no = 0;
+
+
+
+
+
+
+
+alter table public.skill_grades
+add column if not exists position text,
+add column if not exists level numeric(4,2),
+add column if not exists increase_monthly_idr int not null default 0,
+add column if not exists increase_hourly_idr int not null default 0;
+
+-- one grade per (position, level)
+create unique index if not exists skill_grades_position_level_unique
+on public.skill_grades(position, level);
+
+
+
+
+alter table public.seniority_grades
+add column if not exists increase_monthly_idr int not null default 0,
+add column if not exists increase_hourly_idr int not null default 0;
+
+
+
+
+
+alter table public.skill_grades drop column if exists increase_hourly_idr;
+alter table public.seniority_grades drop column if exists increase_hourly_idr;
+
+
+
+
+alter table seniority_grades drop column name;
+
+
+
+
+
+alter table public.seniority_grades
+add column if not exists grade int;
+
+alter table public.seniority_grades
+alter column grade set not null;
+
+
+
+drop index if exists seniority_grades_grade_unique;
+
+create unique index seniority_grades_grade_unique
+on public.seniority_grades(grade);
+
+
+alter table public.seniority_grades
+add constraint seniority_grade_non_negative
+check (grade >= 0);
+
+
+
+
+
+
+-- 1) Remove hourly if it exists from earlier experiments
+alter table public.skill_grades
+drop column if exists increase_hourly_idr;
+
+-- 2) Drop name + its unique constraint/index
+alter table public.skill_grades
+drop constraint if exists skill_grades_name_key;
+
+alter table public.skill_grades
+drop column if exists name;
+
+-- 3) Make position + level required (MVP-safe)
+alter table public.skill_grades
+alter column position set not null;
+
+alter table public.skill_grades
+alter column level set not null;
+
+-- 4) Enforce sensible level values (optional but recommended)
+alter table public.skill_grades
+add constraint skill_grades_level_positive
+check (level > 0);
+
+-- 5) Enforce uniqueness by (position, level)
+drop index if exists skill_grades_position_level_unique;
+
+create unique index skill_grades_position_level_unique
+on public.skill_grades(position, level);
