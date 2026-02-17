@@ -64,12 +64,19 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState<string>("");
   const [employees, setEmployees] = useState<BasicEmployeeRow[]>([]);
+  const [selectedEmployee, setSelectedEmployee] = useState<BasicEmployeeRow | null>(null);
 
   const [period, setPeriod] = useState<PayrollPeriod | null>(null);
   const [periodError, setPeriodError] = useState<string | null>(null);
   const [periodLoading, setPeriodLoading] = useState(true);
 
   useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setSelectedEmployee(null);
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+
     let alive = true;
 
     (async () => {
@@ -179,6 +186,7 @@ export default function HomePage() {
     })();
 
     return () => {
+      window.removeEventListener("keydown", onKeyDown);
       alive = false;
     };
   }, [router]);
@@ -298,7 +306,11 @@ export default function HomePage() {
                   </tr>
                 ) : (
                   employees.map((e) => (
-                    <tr key={e.uuid} className="border-t border-[var(--ikkimo-border)]">
+                    <tr
+                      key={e.uuid}
+                      className="border-t border-[var(--ikkimo-border)] hover:bg-[color:var(--ikkimo-brand)]/5 cursor-pointer"
+                      onClick={() => setSelectedEmployee(e)}
+                    >
                       <td className="px-5 py-3">{e.internal_no}</td>
                       <td className="px-5 py-3">{e.employee_code}</td>
                       <td className="px-5 py-3">{e.employee_name}</td>
@@ -319,6 +331,66 @@ export default function HomePage() {
           </div>
         </section>
       </main>
+      {selectedEmployee ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          aria-modal="true"
+          role="dialog"
+        >
+          <button
+            className="absolute inset-0 bg-black/30"
+            aria-label="Close"
+            onClick={() => setSelectedEmployee(null)}
+          />
+
+          <div className="relative w-full max-w-lg rounded-2xl border border-[var(--ikkimo-border)] bg-white p-6 shadow-lg">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-lg font-semibold">
+                  {selectedEmployee.employee_name}
+                </div>
+                <div className="mt-1 text-sm">
+                  Code: <span className="font-medium">{selectedEmployee.employee_code}</span>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setSelectedEmployee(null)}
+                className="rounded-xl border border-[var(--ikkimo-border)] px-3 py-1.5 text-sm hover:border-[var(--ikkimo-brand)]"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-[var(--ikkimo-border)] p-3">
+                <div className="text-xs font-semibold">Department</div>
+                <div className="mt-1 text-sm">{selectedEmployee.department ?? "-"}</div>
+              </div>
+
+              <div className="rounded-xl border border-[var(--ikkimo-border)] p-3">
+                <div className="text-xs font-semibold">Position</div>
+                <div className="mt-1 text-sm">{selectedEmployee.position ?? "-"}</div>
+              </div>
+
+              <div className="rounded-xl border border-[var(--ikkimo-border)] p-3 sm:col-span-2">
+                <div className="text-xs font-semibold">Start date</div>
+                <div className="mt-1 text-sm">
+                  {selectedEmployee.start_date
+                    ? new Date(selectedEmployee.start_date)
+                        .toLocaleDateString("en-GB")
+                        .replace(/\//g, "-")
+                    : "-"}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 text-xs">
+              Tip: press <span className="font-semibold">Esc</span> to close.
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
