@@ -25,11 +25,23 @@ type BasicEmployeeRow = {
   uuid: string;
   internal_no: number;
   employee_code: string;
+  preferred_name: string | null;
   employee_name: string;
   department: string | null;
   position: string | null;
   start_date: string | null;
   active: boolean;
+  base_salary: number;
+  current_salary?: number | null;
+  seniority_grades?: {
+    grade: number;
+    increase_monthly_idr?: number;
+  }[];
+  skill_grades?: {
+    position: string | null;
+    level: number | null;
+    increase_monthly_idr?: number;
+  }[];
 };
 
 type PayrollPeriod = {
@@ -94,7 +106,9 @@ export default function HomePage() {
 
       const employeesPromise = supabase
         .from("employees")
-        .select("uuid, internal_no, employee_code, employee_name, department, position, start_date, active")
+        .select(
+          "uuid, internal_no, employee_code, preferred_name, employee_name, department, position, start_date, active, base_salary, current_salary, seniority_grades(grade, increase_monthly_idr), skill_grades(position, level, increase_monthly_idr)"
+        )
         .eq("active", true)
         .order("internal_no", { ascending: true })
         .limit(500);
@@ -283,10 +297,11 @@ export default function HomePage() {
               <thead className="text-xs">
                 <tr>
                   <th className="px-5 py-3">No.</th>
-                  <th className="px-5 py-3">Code</th>
-                  <th className="px-5 py-3">Name</th>
-                  <th className="px-5 py-3">Dept</th>
-                  <th className="px-5 py-3">Position</th>
+                  <th className="px-5 py-3">No. ID Karyawan</th>
+                  <th className="px-5 py-3">Nama (Panggilan)</th>
+                  <th className="px-5 py-3">Nama Lengkap</th>
+                  <th className="px-5 py-3">Department</th>
+                  <th className="px-5 py-3">Posisi</th>
                   <th className="px-5 py-3">Start date</th>
                 </tr>
               </thead>
@@ -294,13 +309,13 @@ export default function HomePage() {
               <tbody className="border-t border-[var(--ikkimo-border)]">
                 {loading ? (
                   <tr>
-                    <td className="px-5 py-4 text-sm" colSpan={6}>
+                    <td className="px-5 py-4 text-sm" colSpan={7}>
                       Loading…
                     </td>
                   </tr>
                 ) : employees.length === 0 ? (
                   <tr>
-                    <td className="px-5 py-4 text-sm" colSpan={6}>
+                    <td className="px-5 py-4 text-sm" colSpan={7}>
                       No employee rows available yet (or blocked by RLS).
                     </td>
                   </tr>
@@ -313,14 +328,17 @@ export default function HomePage() {
                     >
                       <td className="px-5 py-3">{e.internal_no}</td>
                       <td className="px-5 py-3">{e.employee_code}</td>
+                      <td className="px-5 py-3">{e.preferred_name ?? "-"}</td>
                       <td className="px-5 py-3">{e.employee_name}</td>
                       <td className="px-5 py-3">{e.department ?? "-"}</td>
                       <td className="px-5 py-3">{e.position ?? "-"}</td>
                       <td className="px-5 py-3">
                         {e.start_date
-                          ? new Date(e.start_date)
-                              .toLocaleDateString("en-GB")
-                              .replace(/\//g, "-")
+                          ? new Intl.DateTimeFormat("en-GB", {
+                              day: "2-digit",
+                              month: "short",
+                              year: "numeric",
+                            }).format(new Date(e.start_date))
                           : "-"}
                       </td>
                     </tr>
@@ -349,8 +367,11 @@ export default function HomePage() {
                 <div className="text-lg font-semibold">
                   {selectedEmployee.employee_name}
                 </div>
+                <div className="mt-0.5 text-sm">
+                  {selectedEmployee.preferred_name ?? "-"}
+                </div>
                 <div className="mt-1 text-sm">
-                  Code: <span className="font-medium">{selectedEmployee.employee_code}</span>
+                  No ID Karyawan: <span className="font-medium">{selectedEmployee.employee_code}</span>
                 </div>
               </div>
 
@@ -373,13 +394,40 @@ export default function HomePage() {
                 <div className="mt-1 text-sm">{selectedEmployee.position ?? "-"}</div>
               </div>
 
+              <div className="rounded-xl border border-[var(--ikkimo-border)] p-3">
+                <div className="text-xs font-semibold">Seniority grade</div>
+                <div className="mt-1 text-sm">
+                  {selectedEmployee.seniority_grades?.[0]?.grade ?? "-"}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-[var(--ikkimo-border)] p-3">
+                <div className="text-xs font-semibold">Skill grade</div>
+                <div className="mt-1 text-sm">
+                  {selectedEmployee.skill_grades?.[0]?.position &&
+                  selectedEmployee.skill_grades?.[0]?.level !== null &&
+                  selectedEmployee.skill_grades?.[0]?.level !== undefined
+                    ? `${selectedEmployee.skill_grades[0].position} L${selectedEmployee.skill_grades[0].level}`
+                    : "-"}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-[var(--ikkimo-border)] p-3 sm:col-span-2">
+                <div className="text-xs font-semibold">Base salary (IDR)</div>
+                <div className="mt-1 text-sm">
+                  {new Intl.NumberFormat("id-ID").format(selectedEmployee.base_salary ?? 0)}
+                </div>
+              </div>
+
               <div className="rounded-xl border border-[var(--ikkimo-border)] p-3 sm:col-span-2">
                 <div className="text-xs font-semibold">Start date</div>
                 <div className="mt-1 text-sm">
                   {selectedEmployee.start_date
-                    ? new Date(selectedEmployee.start_date)
-                        .toLocaleDateString("en-GB")
-                        .replace(/\//g, "-")
+                    ? new Intl.DateTimeFormat("en-GB", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      }).format(new Date(selectedEmployee.start_date))
                     : "-"}
                 </div>
               </div>
