@@ -1,0 +1,467 @@
+-- ===== LOOKUPS (minimal placeholders, can stay empty for now) =====
+create table if not exists public.skill_grades (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  notes text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.seniority_grades (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  notes text,
+  created_at timestamptz not null default now()
+);
+
+-- ===== EMPLOYEES (master data) =====
+create table if not exists public.employees (
+  uuid uuid primary key default gen_random_uuid(),
+
+  -- your own internal numeric id (1..100ish)
+  internal_no int not null unique,
+
+  -- your "employee id (indonesian name)" unique per employee
+  employee_code text not null unique,
+
+  employee_name text not null,
+  preferred_name text,
+  department text,
+  position text,
+  start_date date,
+
+  base_salary numeric(14,2) not null default 0,
+
+  -- keep for migration period; can be dropped later
+  current_salary numeric(14,2),
+
+  skill_grade_id uuid references public.skill_grades(id),
+  seniority_grade_id uuid references public.seniority_grades(id),
+
+  active boolean not null default true,
+
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+
+
+-- Enforce exactly 8 digits
+alter table public.employees
+  add constraint employee_code_8_digits
+  check (employee_code ~ '^[0-9]{8}$');
+
+-- Ensure internal_no is optional but unique when present
+-- (unique already works with nulls in Postgres; multiple nulls allowed)
+create unique index if not exists employees_internal_no_unique
+  on public.employees(internal_no);
+
+-- Ensure employee_code unique (if not already)
+create unique index if not exists employees_employee_code_unique
+  on public.employees(employee_code);
+
+
+alter table public.employees
+  alter column internal_no drop not null;
+
+
+
+
+
+-- ===== PAYROLL PERIODS (one row per month) =====
+create table if not exists public.payroll_periods (
+  id uuid primary key default gen_random_uuid(),
+  year int not null,
+  month int not null check (month between 1 and 12),
+
+  -- planned working days for Indonesia for that month (denominator)
+  planned_working_days int not null check (planned_working_days >= 0),
+
+  locked boolean not null default false,
+  notes text,
+
+  created_at timestamptz not null default now(),
+  unique (year, month)
+);
+
+-- ===== PAYROLL ENTRIES (monthly inputs per employee) =====
+create table if not exists public.payroll_entries (
+  id uuid primary key default gen_random_uuid(),
+
+  period_id uuid not null references public.payroll_periods(id) on delete cascade,
+  employee_uuid uuid not null references public.employees(uuid) on delete restrict,
+
+  -- MVP monthly inputs
+  full_days_worked int not null default 0,          -- in-office full days
+  on_time_days int not null default 0,              -- "timely this many times" (day-level for now)
+  excused_days int not null default 0,              -- planned holiday/sick bucket for MVP
+  unexcused_days int not null default 0,
+
+  notes text,
+
+  -- store calculated number (filled by app). optional now.
+  salary_to_pay numeric(14,2),
+
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+
+  unique (period_id, employee_uuid)
+);
+
+create index if not exists idx_payroll_entries_period on public.payroll_entries(period_id);
+create index if not exists idx_payroll_entries_employee on public.payroll_entries(employee_uuid);
+
+
+
+
+
+
+
+create table if not exists public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  role text not null check (role in ('admin','payroll','viewer')) default 'viewer',
+  created_at timestamptz not null default now()
+);
+
+alter table public.profiles enable row level security;
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+as $$
+begin
+  insert into public.profiles (id, role)
+  values (new.id, 'viewer')
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+after insert on auth.users
+for each row execute procedure public.handle_new_user();
+
+
+
+
+
+
+create or replace function public.has_role(required_role text)
+returns boolean
+language sql
+stable
+as $$
+  select exists (
+    select 1 from public.profiles p
+    where p.id = auth.uid() and p.role = required_role
+  );
+$$;
+
+create or replace function public.is_admin_or_payroll()
+returns boolean
+language sql
+stable
+as $$
+  select exists (
+    select 1 from public.profiles p
+    where p.id = auth.uid() and p.role in ('admin','payroll')
+  );
+$$;
+
+
+
+
+
+
+
+
+-- Employees: read for admin+payroll, write admin only
+alter table public.employees enable row level security;
+
+create policy "employees read"
+on public.employees for select
+to authenticated
+using (public.is_admin_or_payroll());
+
+create policy "employees write admin"
+on public.employees for insert
+to authenticated
+with check (public.has_role('admin'));
+
+create policy "employees update admin"
+on public.employees for update
+to authenticated
+using (public.has_role('admin'))
+with check (public.has_role('admin'));
+
+-- Periods: read for admin+payroll, write admin only (locking is admin-only by design)
+alter table public.payroll_periods enable row level security;
+
+create policy "periods read"
+on public.payroll_periods for select
+to authenticated
+using (public.is_admin_or_payroll());
+
+create policy "periods write admin"
+on public.payroll_periods for insert
+to authenticated
+with check (public.has_role('admin'));
+
+create policy "periods update admin"
+on public.payroll_periods for update
+to authenticated
+using (public.has_role('admin'))
+with check (public.has_role('admin'));
+
+-- Entries: admin+payroll can read/insert/update, but NOT when period is locked
+alter table public.payroll_entries enable row level security;
+
+create policy "entries read"
+on public.payroll_entries for select
+to authenticated
+using (public.is_admin_or_payroll());
+
+create policy "entries insert admin+payroll if unlocked"
+on public.payroll_entries for insert
+to authenticated
+with check (
+  public.is_admin_or_payroll()
+  and exists (
+    select 1 from public.payroll_periods p
+    where p.id = period_id and p.locked = false
+  )
+);
+
+create policy "entries update admin+payroll if unlocked"
+on public.payroll_entries for update
+to authenticated
+using (
+  public.is_admin_or_payroll()
+  and exists (
+    select 1 from public.payroll_periods p
+    where p.id = period_id and p.locked = false
+  )
+)
+with check (
+  public.is_admin_or_payroll()
+  and exists (
+    select 1 from public.payroll_periods p
+    where p.id = period_id and p.locked = false
+  )
+);
+
+
+
+
+
+
+
+
+update public.profiles p
+set role = 'admin'
+from auth.users u
+where p.id = u.id and u.email = 'ikkimo@ikkimo.com';
+
+update public.profiles p
+set role = 'payroll'
+from auth.users u
+where p.id = u.id and u.email = 'max@ikkimo.com';
+
+
+
+
+
+
+
+alter table public.skill_grades enable row level security;
+alter table public.seniority_grades enable row level security;
+
+-- READ (admin+payroll)
+create policy "skill grades read"
+on public.skill_grades for select
+to authenticated
+using (public.is_admin_or_payroll());
+
+create policy "seniority grades read"
+on public.seniority_grades for select
+to authenticated
+using (public.is_admin_or_payroll());
+
+-- WRITE (admin only)
+create policy "skill grades write admin"
+on public.skill_grades for insert
+to authenticated
+with check (public.has_role('admin'));
+
+create policy "skill grades update admin"
+on public.skill_grades for update
+to authenticated
+using (public.has_role('admin'))
+with check (public.has_role('admin'));
+
+create policy "seniority grades write admin"
+on public.seniority_grades for insert
+to authenticated
+with check (public.has_role('admin'));
+
+create policy "seniority grades update admin"
+on public.seniority_grades for update
+to authenticated
+using (public.has_role('admin'))
+with check (public.has_role('admin'));
+
+
+
+
+
+
+
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists set_employees_updated_at on public.employees;
+create trigger set_employees_updated_at
+before update on public.employees
+for each row execute procedure public.set_updated_at();
+
+drop trigger if exists set_entries_updated_at on public.payroll_entries;
+create trigger set_entries_updated_at
+before update on public.payroll_entries
+for each row execute procedure public.set_updated_at();
+
+drop trigger if exists set_periods_updated_at on public.payroll_periods;
+alter table public.payroll_periods add column if not exists updated_at timestamptz not null default now();
+create trigger set_periods_updated_at
+before update on public.payroll_periods
+for each row execute procedure public.set_updated_at();
+
+
+
+
+
+
+
+
+alter table public.payroll_periods
+add column if not exists red_days int not null default 0
+check (red_days >= 0 and red_days <= 31);
+
+
+
+
+
+
+alter table public.employees
+drop constraint if exists employee_code_8_digits;
+
+
+
+alter table public.employees
+add constraint employee_code_format
+check (employee_code ~ '^[A-Za-z0-9]{3,12}$');
+
+
+
+
+update public.employees
+set internal_no = null
+where internal_no = 0;
+
+
+
+
+
+
+
+alter table public.skill_grades
+add column if not exists position text,
+add column if not exists level numeric(4,2),
+add column if not exists increase_monthly_idr int not null default 0,
+add column if not exists increase_hourly_idr int not null default 0;
+
+-- one grade per (position, level)
+create unique index if not exists skill_grades_position_level_unique
+on public.skill_grades(position, level);
+
+
+
+
+alter table public.seniority_grades
+add column if not exists increase_monthly_idr int not null default 0,
+add column if not exists increase_hourly_idr int not null default 0;
+
+
+
+
+
+alter table public.skill_grades drop column if exists increase_hourly_idr;
+alter table public.seniority_grades drop column if exists increase_hourly_idr;
+
+
+
+
+alter table seniority_grades drop column name;
+
+
+
+
+
+alter table public.seniority_grades
+add column if not exists grade int;
+
+alter table public.seniority_grades
+alter column grade set not null;
+
+
+
+drop index if exists seniority_grades_grade_unique;
+
+create unique index seniority_grades_grade_unique
+on public.seniority_grades(grade);
+
+
+alter table public.seniority_grades
+add constraint seniority_grade_non_negative
+check (grade >= 0);
+
+
+
+
+
+
+-- 1) Remove hourly if it exists from earlier experiments
+alter table public.skill_grades
+drop column if exists increase_hourly_idr;
+
+-- 2) Drop name + its unique constraint/index
+alter table public.skill_grades
+drop constraint if exists skill_grades_name_key;
+
+alter table public.skill_grades
+drop column if exists name;
+
+-- 3) Make position + level required (MVP-safe)
+alter table public.skill_grades
+alter column position set not null;
+
+alter table public.skill_grades
+alter column level set not null;
+
+-- 4) Enforce sensible level values (optional but recommended)
+alter table public.skill_grades
+add constraint skill_grades_level_positive
+check (level > 0);
+
+-- 5) Enforce uniqueness by (position, level)
+drop index if exists skill_grades_position_level_unique;
+
+create unique index skill_grades_position_level_unique
+on public.skill_grades(position, level);
