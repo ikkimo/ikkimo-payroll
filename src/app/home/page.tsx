@@ -3,7 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -77,6 +77,52 @@ export default function HomePage() {
   const [email, setEmail] = useState<string>("");
   const [employees, setEmployees] = useState<BasicEmployeeRow[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<BasicEmployeeRow | null>(null);
+
+  const [sortBy, setSortBy] = useState<
+    "internal_no" | "employee_code" | "employee_name" | "start_date" | "department" | "position"
+  >("internal_no");
+
+  const sortedEmployees = useMemo(() => {
+    const list = [...employees];
+
+    const safeStr = (v: string | null | undefined) => (v ?? "").trim();
+
+    list.sort((a, b) => {
+      switch (sortBy) {
+        case "internal_no": {
+          const ai = a.internal_no && a.internal_no > 0 ? a.internal_no : Number.POSITIVE_INFINITY;
+          const bi = b.internal_no && b.internal_no > 0 ? b.internal_no : Number.POSITIVE_INFINITY;
+          return ai - bi;
+        }
+        case "employee_code":
+          return safeStr(a.employee_code).localeCompare(safeStr(b.employee_code), "en", {
+            numeric: true,
+            sensitivity: "base",
+          });
+        case "employee_name":
+          return safeStr(a.employee_name).localeCompare(safeStr(b.employee_name), "en", {
+            sensitivity: "base",
+          });
+        case "department":
+          return safeStr(a.department).localeCompare(safeStr(b.department), "en", {
+            sensitivity: "base",
+          });
+        case "position":
+          return safeStr(a.position).localeCompare(safeStr(b.position), "en", {
+            sensitivity: "base",
+          });
+        case "start_date": {
+          const ta = a.start_date ? new Date(a.start_date).getTime() : Number.POSITIVE_INFINITY;
+          const tb = b.start_date ? new Date(b.start_date).getTime() : Number.POSITIVE_INFINITY;
+          return ta - tb;
+        }
+        default:
+          return 0;
+      }
+    });
+
+    return list;
+  }, [employees, sortBy]);
 
   const [period, setPeriod] = useState<PayrollPeriod | null>(null);
   const [periodError, setPeriodError] = useState<string | null>(null);
@@ -283,13 +329,40 @@ export default function HomePage() {
         </div>
 
         <section className="mt-6 rounded-2xl border border-[var(--ikkimo-border)] bg-white">
-          <div className="flex items-center justify-between border-b border-[var(--ikkimo-border)] px-5 py-4">
+          <div className="flex flex-col gap-3 border-b border-[var(--ikkimo-border)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-sm font-semibold">Employees</div>
             </div>
 
-            {/* Later: search/filter/sort */}
-            <div className="text-xs">{employees.length} rows</div>
+            <div className="flex items-center gap-3">
+              {/* <div className="text-xs">{employees.length} rows</div> */}
+
+              <label className="flex items-center gap-2 text-xs">
+                <span>Sort</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) =>
+                    setSortBy(
+                      e.target.value as
+                        | "internal_no"
+                        | "employee_code"
+                        | "employee_name"
+                        | "start_date"
+                        | "department"
+                        | "position"
+                    )
+                  }
+                  className="rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
+                >
+                  <option value="internal_no">No.</option>
+                  <option value="employee_code">No. ID Karyawan</option>
+                  <option value="employee_name">Name Lengkap</option>
+                  <option value="start_date">Start date</option>
+                  <option value="department">Department</option>
+                  <option value="position">Posisi</option>
+                </select>
+              </label>
+            </div>
           </div>
 
           <div className="overflow-x-auto">
@@ -320,7 +393,7 @@ export default function HomePage() {
                     </td>
                   </tr>
                 ) : (
-                  employees.map((e) => (
+                  sortedEmployees.map((e) => (
                     <tr
                       key={e.uuid}
                       className="border-t border-[var(--ikkimo-border)] hover:bg-[color:var(--ikkimo-brand)]/5 cursor-pointer"
