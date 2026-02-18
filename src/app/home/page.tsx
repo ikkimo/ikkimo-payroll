@@ -82,11 +82,37 @@ export default function HomePage() {
     "internal_no" | "employee_code" | "employee_name" | "start_date" | "department" | "position"
   >("internal_no");
 
+  const [departmentFilter, setDepartmentFilter] = useState<string>("all");
+  const [search, setSearch] = useState<string>("");
+
+  const filteredEmployees = useMemo(() => {
+    const q = search.trim().toLowerCase();
+
+    return employees.filter((e) => {
+      if (departmentFilter !== "all") {
+        if ((e.department ?? "").trim() !== departmentFilter) return false;
+      }
+
+      if (!q) return true;
+
+      const hay = [
+        e.employee_name,
+        e.preferred_name ?? "",
+        e.employee_code,
+        String(e.internal_no ?? ""),
+        e.department ?? "",
+        e.position ?? "",
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return hay.includes(q);
+    });
+  }, [employees, departmentFilter, search]);
+
   const sortedEmployees = useMemo(() => {
-    const list = [...employees];
-
+    const list = [...filteredEmployees];
     const safeStr = (v: string | null | undefined) => (v ?? "").trim();
-
     list.sort((a, b) => {
       switch (sortBy) {
         case "internal_no": {
@@ -120,9 +146,8 @@ export default function HomePage() {
           return 0;
       }
     });
-
     return list;
-  }, [employees, sortBy]);
+  }, [filteredEmployees, sortBy]);
 
   const [period, setPeriod] = useState<PayrollPeriod | null>(null);
   const [periodError, setPeriodError] = useState<string | null>(null);
@@ -329,39 +354,87 @@ export default function HomePage() {
         </div>
 
         <section className="mt-6 rounded-2xl border border-[var(--ikkimo-border)] bg-white">
-          <div className="flex flex-col gap-3 border-b border-[var(--ikkimo-border)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
+          <div className="border-b border-[var(--ikkimo-border)] px-5 py-4">
+            {/* Row 1: title left, search right */}
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div className="text-sm font-semibold">Employees</div>
-            </div>
 
-            <div className="flex items-center gap-3">
-              {/* <div className="text-xs">{employees.length} rows</div> */}
+              <div className="flex w-full flex-col items-stretch sm:w-auto sm:items-end">
+                <label className="flex w-full items-center gap-2 text-xs sm:w-auto">
+                  <span className="hidden sm:inline">Search</span>
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search…"
+                    className="w-full min-w-0 sm:w-56 rounded-md border border-[var(--ikkimo-border)] bg-white px-2 py-1 text-[11px] outline-none focus:border-[var(--ikkimo-brand)]"
+                  />
+                </label>
 
-              <label className="flex items-center gap-2 text-xs">
-                <span>Sort</span>
-                <select
-                  value={sortBy}
-                  onChange={(e) =>
-                    setSortBy(
-                      e.target.value as
-                        | "internal_no"
-                        | "employee_code"
-                        | "employee_name"
-                        | "start_date"
-                        | "department"
-                        | "position"
-                    )
-                  }
-                  className="rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
-                >
-                  <option value="internal_no">No.</option>
-                  <option value="employee_code">No. ID Karyawan</option>
-                  <option value="employee_name">Name Lengkap</option>
-                  <option value="start_date">Start date</option>
-                  <option value="department">Department</option>
-                  <option value="position">Posisi</option>
-                </select>
-              </label>
+                {/* Row 2: filter + sort under the search (right aligned) */}
+                <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+                  <label className="flex items-center gap-2 text-xs">
+                    <span>Department</span>
+                    <select
+                      value={departmentFilter}
+                      onChange={(e) => setDepartmentFilter(e.target.value)}
+                      className="rounded-md border border-[var(--ikkimo-border)] bg-white px-2 py-1 text-[11px] outline-none focus:border-[var(--ikkimo-brand)]"
+                    >
+                      <option value="all">All</option>
+                      {[...new Set(
+                        employees
+                          .map((e) => (e.department ?? "").trim())
+                          .filter(Boolean)
+                      )]
+                        .sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }))
+                        .map((dep) => (
+                          <option key={dep} value={dep}>
+                            {dep}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+
+                  <label className="flex items-center gap-2 text-xs">
+                    <span>Sort</span>
+                    <select
+                      value={sortBy}
+                      onChange={(e) =>
+                        setSortBy(
+                          e.target.value as
+                            | "internal_no"
+                            | "employee_code"
+                            | "employee_name"
+                            | "start_date"
+                            | "department"
+                            | "position"
+                        )
+                      }
+                      className="rounded-md border border-[var(--ikkimo-border)] bg-white px-2 py-1 text-[11px] outline-none focus:border-[var(--ikkimo-brand)]"
+                    >
+                      <option value="internal_no">No.</option>
+                      <option value="employee_code">No. ID Karyawan</option>
+                      <option value="employee_name">Name Lengkap</option>
+                      <option value="start_date">Start date</option>
+                      <option value="department">Department</option>
+                      <option value="position">Posisi</option>
+                    </select>
+                  </label>
+
+                  {(departmentFilter !== "all" || search.trim() || sortBy !== "internal_no") && (
+                    <button
+                      type="button"
+                      className="text-[11px] underline underline-offset-4 opacity-70 hover:opacity-100"
+                      onClick={() => {
+                        setDepartmentFilter("all");
+                        setSearch("");
+                        setSortBy("internal_no");
+                      }}
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
