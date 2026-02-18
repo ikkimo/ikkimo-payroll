@@ -1,0 +1,81 @@
+[00:00:00.615] Server  LOG     ✓ Ready in 445ms
+[00:00:11.230] Server  ERROR   ⨯ Error: supabaseKey is required.
+[00:00:11.401] Server  ERROR   ⨯ Error: supabaseKey is required.
+[00:00:11.974] Browser ERROR   uncaughtError: Error: supabaseKey is required.
+[00:00:37.536] Server  WARN    ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+[00:00:37.536] Server  WARN    ⚠ Fast Refresh had to perform a full reload when ./src/lib/supabaseClient.ts changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+[00:00:37.536] Server  WARN    ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+[00:00:37.556] Server  LOG     ✓ Compiled in 272ms
+[00:11:42.280] Server  LOG     ✓ Compiled in 8ms
+[00:17:17.203] Server  ERROR   ⨯ "The requested resource isn't a valid image for" "/logo.png" "received" null
+[00:17:23.479] Server  ERROR   ⨯ "The requested resource isn't a valid image for" "/logo.png" "received" null
+[00:17:41.374] Server  LOG     ✓ Compiled in 39ms
+[00:17:42.044] Browser WARN    Image with src "/ikkimo_logo.png" has either width or height modified, but not the other. If you use CSS to change the size of your image, also include the styles 'width: "auto"' or 'height: "auto"' to maintain the aspect ratio.
+[00:18:06.581] Server  LOG     ✓ Compiled in 54ms
+[17:05:57.158] Server  LOG     ✓ Compiled in 169ms
+[17:05:58.225] Browser ERROR   ./src/app/app/page.tsx:3:1
+Ecmascript file had an error
+  1 | export const dynamic = "force-dynamic";
+  2 |
+> 3 | "use client";
+    | ^^^^^^^^^^^^^
+  4 |
+  5 | import { JSX, useEffect, useState } from "react";
+  6 | import { useRouter } from "next/navigation";
+
+The "use client" directive must be placed before other expressions. Move it to the top of the file to resolve this issue.
+[17:05:58.225] Browser ERROR   ./src/app/app/page.tsx:5:15
+Ecmascript file had an error
+  3 | "use client";
+  4 |
+> 5 | import { JSX, useEffect, useState } from "react";
+    |               ^^^^^^^^^
+  6 | import { useRouter } from "next/navigation";
+  7 | import { supabase } from "@/lib/supabaseClient";
+  8 |
+
+You're importing a component that needs `useEffect`. This React Hook only works in a Client Component. To fix, mark the file (or its parent) with the `"use client"` directive.
+
+ Learn more: https://nextjs.org/docs/app/api-reference/directives/use-client
+[17:05:58.225] Browser ERROR   ./src/app/app/page.tsx:6:10
+Ecmascript file had an error
+  4 |
+  5 | import { JSX, useEffect, useState } from "react";
+> 6 | import { useRouter } from "next/navigation";
+    |          ^^^^^^^^^
+  7 | import { supabase } from "@/lib/supabaseClient";
+  8 |
+  9 | export default function AppPage(): JSX.Element {
+
+You're importing a component that needs `useRouter`. This React Hook only works in a Client Component. To fix, mark the file (or its parent) with the `"use client"` directive.
+
+ Learn more: https://nextjs.org/docs/app/api-reference/directives/use-client
+[17:05:58.225] Browser ERROR   ./src/app/app/page.tsx:5:26
+Ecmascript file had an error
+  3 | "use client";
+  4 |
+> 5 | import { JSX, useEffect, useState } from "react";
+    |                          ^^^^^^^^
+  6 | import { useRouter } from "next/navigation";
+  7 | import { supabase } from "@/lib/supabaseClient";
+  8 |
+
+You're importing a component that needs `useState`. This React Hook only works in a Client Component. To fix, mark the file (or its parent) with the `"use client"` directive.
+
+ Learn more: https://nextjs.org/docs/app/api-reference/directives/use-client
+[17:10:00.063] Server  LOG     ✓ Compiled in 53ms
+[17:21:53.524] Server  LOG     ✓ Compiled in 128ms
+[17:21:58.255] Server  LOG     ✓ Compiled in 50ms
+[17:22:03.165] Server  LOG     ✓ Compiled in 39ms
+[17:29:17.948] Server  LOG     ✓ Compiled in 32ms
+[17:30:52.561] Server  LOG     ✓ Compiled in 38ms
+[17:31:03.781] Server  LOG     ✓ Compiled in 46ms
+[17:31:09.085] Server  LOG     ✓ Compiled in 39ms
+[19:01:12.137] Server  LOG     ✓ Compiled in 190ms
+[19:01:23.965] Server  LOG     ✓ Compiled in 53ms
+[19:02:10.889] Server  LOG     ✓ Compiled in 8ms
+[19:03:14.530] Server  LOG     ✓ Compiled in 39ms
+[19:39:09.201] Server  LOG     ✓ Compiled in 104ms
+[19:42:35.258] Server  LOG     ✓ Compiled in 11ms
+[19:43:06.573] Server  LOG     ✓ Compiled in 32ms
+[19:43:25.258] Server  LOG     ✓ Compiled in 76ms

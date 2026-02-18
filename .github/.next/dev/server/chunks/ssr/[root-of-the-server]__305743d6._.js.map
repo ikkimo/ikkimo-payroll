@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 18, "column": 0}, "map": {"version":3,"sources":["file:///Users/luanadefourny/Documents/business/ikkimo/ikkimo_git/ikkimo-payroll/src/app/page.tsx"],"sourcesContent":["import { redirect } from \"next/navigation\";\n\nexport default function Home() {\n  redirect(\"/login\");\n}"],"names":[],"mappings":";;;;AAAA;AAAA;;AAEe,SAAS;IACtB,IAAA,iMAAQ,EAAC;AACX"}}]
+}
