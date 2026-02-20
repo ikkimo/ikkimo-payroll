@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint ."
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.95.3",
@@ -24,8 +24,5 @@
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
     "typescript": "^5"
-  },
-  "overrides": {
-    "ajv": "^8.18.0"
   }
 }
