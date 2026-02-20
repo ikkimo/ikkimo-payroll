@@ -1,11 +1,11 @@
 "use client";
 
-import { JSX, useState } from "react";
-import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
 
-export default function LoginPage(): JSX.Element {
+export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -22,33 +22,28 @@ export default function LoginPage(): JSX.Element {
     setLoading(false);
     if (error) return setMsg(error.message);
 
-    router.push("/app");
+    router.push("/home");
   }
 
   return (
-    <>
-      <header>
-        <div className="flex flex-col items-center gap-4 mb-6">
+    <main className="min-h-screen w-full bg-[var(--ikkimo-bg)] text-[var(--ikkimo-text)] overflow-hidden">
+      <div className="min-h-screen w-full flex flex-col items-center justify-center px-6">
+        <div className="mb-8 flex flex-col items-center">
           <Image
             src="/ikkimo_logo.png"
             alt="iKKim’O logo"
-            width={160}
-            height={60}
+            width={64}
+            height={64}
             priority
           />
         </div>
-      </header>
-      <main className="min-h-screen grid place-items-center bg-ikkimo-bg px-6 text-ikkimo-text">
+
         <form
           onSubmit={onSubmit}
-          className="w-full max-w-md rounded-2xl border border-ikkimo-border bg-white p-6"
+          className="w-full max-w-md rounded-2xl border border-[var(--ikkimo-border)] bg-white p-6"
         >
-          <div className="flex items-center gap-3">
-            <div className="h-3 w-3 rounded-full bg-ikkimo-brand" />
-            <h1 className="text-lg font-semibold">iKKim’O Payroll</h1>
-          </div>
-
-          <p className="mt-2 text-sm text-ikkimo-text/75">
+          <h1 className="text-lg font-semibold">iKKim’O Payroll</h1>
+          <p className="mt-2 text-sm opacity-75">
             Sign in to access the internal payroll calculator.
           </p>
 
@@ -56,7 +51,7 @@ export default function LoginPage(): JSX.Element {
             <div>
               <label className="text-xs font-medium">Email</label>
               <input
-                className="mt-1 w-full rounded-xl border border-ikkimo-border px-3 py-2 text-sm outline-none focus:border-ikkimo-brand"
+                className="mt-1 w-full rounded-xl border border-[var(--ikkimo-border)] px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
                 type="email"
                 autoComplete="email"
                 required
@@ -68,7 +63,7 @@ export default function LoginPage(): JSX.Element {
             <div>
               <label className="text-xs font-medium">Password</label>
               <input
-                className="mt-1 w-full rounded-xl border border-ikkimo-border px-3 py-2 text-sm outline-none focus:border-ikkimo-brand"
+                className="mt-1 w-full rounded-xl border border-[var(--ikkimo-border)] px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
                 type="password"
                 autoComplete="current-password"
                 required
@@ -78,20 +73,21 @@ export default function LoginPage(): JSX.Element {
             </div>
 
             {msg ? (
-              <div className="rounded-xl border border-ikkimo-brand/30 bg-ikkimo-brand/10 px-3 py-2 text-sm">
+              <div className="rounded-xl border border-[color:var(--ikkimo-brand)]/30 bg-[color:var(--ikkimo-brand)]/10 px-3 py-2 text-sm">
                 {msg}
               </div>
             ) : null}
 
             <button
+              type="submit"
               disabled={loading}
-              className="w-full rounded-xl bg-ikkimo-brand py-2 text-sm font-medium text-white disabled:opacity-60"
+              className="mt-4 w-full rounded-xl bg-[color:var(--ikkimo-brand)] py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
             >
               {loading ? "…" : "Sign in"}
             </button>
           </div>
         </form>
-      </main>
-    </>
+      </div>
+    </main>
   );
 }
