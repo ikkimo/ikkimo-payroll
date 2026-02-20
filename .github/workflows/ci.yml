@@ -23,6 +23,19 @@ jobs:
       - name: Install deps
         run: npm ci
 
+      - name: Debug lint invocation
+        run: |
+          set -x
+          pwd
+          ls -la
+          node -v
+          npm -v
+          cat package.json
+          echo "npm config get prefix: $(npm config get prefix)"
+          echo "npm config get userconfig: $(npm config get userconfig)"
+          echo "npm_config_argv: $npm_config_argv"
+          npm run lint --loglevel verbose
+
       - name: Lint
         run: npm run lint
 
