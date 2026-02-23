@@ -2,7 +2,7 @@
 
 export const dynamic = "force-dynamic";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -74,17 +74,15 @@ export default function SettingsPage() {
   const [snapshot, setSnapshot] = useState<PayrollSettingsRow | null>(null);
 
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [confirmPhrase, setConfirmPhrase] = useState("");
+  // Phrase-based confirmation (kept for later in case you want it):
+  // const [confirmPhrase, setConfirmPhrase] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordVerified, setPasswordVerified] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
 
-  const DANGER_PHRASE = "UPDATE PAYROLL SETTINGS";
-
-  const phraseOk = useMemo(
-    () => confirmPhrase.trim() === DANGER_PHRASE,
-    [confirmPhrase]
-  );
+  // Phrase-based confirmation (kept for later in case you want it):
+  // const DANGER_PHRASE = "UPDATE PAYROLL SETTINGS";
+  // const phraseOk = confirmPhrase.trim() === DANGER_PHRASE;
 
   useEffect(() => {
     let alive = true;
@@ -187,7 +185,7 @@ export default function SettingsPage() {
     setSavedMsg(null);
     setError(null);
     setConfirmOpen(false);
-    setConfirmPhrase("");
+    // setConfirmPhrase("");
     setConfirmPassword("");
     setPasswordVerified(false);
     setConfirmError(null);
@@ -196,36 +194,36 @@ export default function SettingsPage() {
   function requestSave() {
     if (!row) return;
     setConfirmOpen(true);
-    setConfirmPhrase("");
+    // setConfirmPhrase("");
     setConfirmPassword("");
     setPasswordVerified(false);
     setConfirmError(null);
   }
 
-  async function verifyPassword() {
+  async function verifyPassword(): Promise<boolean> {
     setConfirmError(null);
+    setPasswordVerified(false);
 
     const pwd = confirmPassword;
     if (!pwd) {
-      setConfirmError("Enter your password to verify.");
-      return;
+      setConfirmError("Enter your password to continue.");
+      return false;
     }
 
-    // Works only for email/password accounts. If you use a different auth method,
-    // the phrase confirmation is the fallback.
+    // Works only for email/password accounts.
     const { error: authErr } = await supabase.auth.signInWithPassword({
       email,
       password: pwd,
     });
 
     if (authErr) {
-      setPasswordVerified(false);
-      setConfirmError(authErr.message);
-      return;
+      setConfirmError("Password is incorrect.");
+      return false;
     }
 
     setPasswordVerified(true);
     setConfirmPassword("");
+    return true;
   }
 
   async function commitSave() {
@@ -427,22 +425,23 @@ export default function SettingsPage() {
 
       {confirmOpen ? (
         <ConfirmSaveModal
-          phrase={confirmPhrase}
-          setPhrase={setConfirmPhrase}
           password={confirmPassword}
-          setPassword={setConfirmPassword}
-          phraseOk={phraseOk}
+          setPassword={(v) => {
+            setConfirmPassword(v);
+            setPasswordVerified(false);
+            setConfirmError(null);
+          }}
           passwordVerified={passwordVerified}
-          verifyPassword={verifyPassword}
           error={confirmError}
-          onCancel={() => setConfirmOpen(false)}
+          onCancel={() => {
+            setConfirmOpen(false);
+            setConfirmPassword("");
+            setPasswordVerified(false);
+            setConfirmError(null);
+          }}
           onConfirm={async () => {
-            if (!(phraseOk || passwordVerified)) {
-              setConfirmError(
-                `Type "${DANGER_PHRASE}" or verify your password to continue.`
-              );
-              return;
-            }
+            const ok = await verifyPassword();
+            if (!ok) return;
             setConfirmOpen(false);
             await commitSave();
           }}
@@ -494,25 +493,17 @@ function NumberField(props: {
 }
 
 function ConfirmSaveModal(props: {
-  phrase: string;
-  setPhrase: (v: string) => void;
   password: string;
   setPassword: (v: string) => void;
-  phraseOk: boolean;
   passwordVerified: boolean;
-  verifyPassword: () => Promise<void>;
   error: string | null;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
   const {
-    phrase,
-    setPhrase,
     password,
     setPassword,
-    phraseOk,
     passwordVerified,
-    verifyPassword,
     error,
     onCancel,
     onConfirm,
@@ -529,6 +520,7 @@ function ConfirmSaveModal(props: {
         </div>
 
         <div className="mt-5 space-y-4">
+          {/*
           <div className="rounded-xl border border-[var(--ikkimo-border)] p-4">
             <div className="text-xs font-semibold">Option A: type the confirmation phrase</div>
             <div className="mt-2 text-xs">Type: <span className="font-semibold">UPDATE PAYROLL SETTINGS</span></div>
@@ -540,26 +532,19 @@ function ConfirmSaveModal(props: {
             />
             {phraseOk ? <div className="mt-2 text-xs">Phrase confirmed.</div> : null}
           </div>
+          */}
 
           <div className="rounded-xl border border-[var(--ikkimo-border)] p-4">
-            <div className="text-xs font-semibold">Option B: verify your password</div>
-            <div className="mt-2 text-xs">Only works for email/password accounts.</div>
-            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-              <input
-                className="w-full flex-1 rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
-                autoComplete="current-password"
-              />
-              <button
-                onClick={verifyPassword}
-                className="rounded-xl border border-[var(--ikkimo-border)] bg-white px-4 py-2 text-sm hover:border-[var(--ikkimo-brand)]"
-              >
-                Verify
-              </button>
-            </div>
+            <div className="text-xs font-semibold">Confirm with your password</div>
+            <div className="mt-2 text-xs">Enter your password, then click <span className="font-semibold">Confirm save</span>.</div>
+            <input
+              className="mt-2 w-full rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password"
+              autoComplete="current-password"
+            />
             {passwordVerified ? <div className="mt-2 text-xs">Password verified.</div> : null}
           </div>
 
@@ -588,8 +573,3 @@ function ConfirmSaveModal(props: {
     </div>
   );
 }
-
-// function toNumber(value: string, fallback: number) {
-//   const n = Number(value);
-//   return Number.isFinite(n) ? n : fallback;
-// }
