@@ -1,6 +1,6 @@
 "use client";
 
-export const dynamic = "force-dynamic";
+// export const dynamic = "force-dynamic";
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
@@ -9,10 +9,9 @@ import { supabase } from "@/lib/supabaseClient";
 import {
   BasicEmployeeRow,
   EmployeeSortKey,
-} from "../../components/employees/types";
-import EmployeesHeaderControls from "../../components/employees/EmployeesHeaderControls";
-import EmployeesTable from "../../components/employees/EmployeesTable";
-import EmployeeModal from "../../components/employees/EmployeeModal";
+} from "@/components/employees/types";
+import EmployeesHeaderControls from "@/components/employees/EmployeesHeaderControls";
+import EmployeesTable from "@/components/employees/EmployeesTable";
 
 function nowYearMonth() {
   const d = new Date();
@@ -64,9 +63,6 @@ const formatDateEn = (iso: string | null | undefined): string => {
   }).format(new Date(iso));
 };
 
-const formatIDR = (value: number | null | undefined): string =>
-  new Intl.NumberFormat("id-ID").format(value ?? 0);
-
 
 export default function HomePage() {
   const router = useRouter();
@@ -74,7 +70,6 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState<string>("");
   const [employees, setEmployees] = useState<BasicEmployeeRow[]>([]);
-  const [selectedEmployee, setSelectedEmployee] = useState<BasicEmployeeRow | null>(null);
 
   const [sortBy, setSortBy] = useState<EmployeeSortKey>("internal_no");
 
@@ -150,20 +145,6 @@ export default function HomePage() {
   const [periodLoading, setPeriodLoading] = useState(true);
 
   useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key !== "Escape") return;
-
-      // Safari uses Esc to exit fullscreen; avoid closing the modal in that case.
-      const doc = document as Document & { webkitFullscreenElement?: Element | null };
-      const isFullscreen = Boolean(doc.fullscreenElement || doc.webkitFullscreenElement);
-
-      if (!isFullscreen && selectedEmployee) {
-        setSelectedEmployee(null);
-      }
-    }
-
-    window.addEventListener("keydown", onKeyDown);
-
     let alive = true;
 
     (async () => {
@@ -275,10 +256,9 @@ export default function HomePage() {
     })();
 
     return () => {
-      window.removeEventListener("keydown", onKeyDown);
       alive = false;
     };
-  }, [router, selectedEmployee]);
+  }, [router]);
 
   async function logout() {
     await supabase.auth.signOut();
@@ -371,19 +351,10 @@ export default function HomePage() {
             loading={loading}
             employees={employees}
             rows={sortedEmployees}
-            onSelect={setSelectedEmployee}
             formatDate={formatDateEn}
           />
         </section>
       </main>
-      {selectedEmployee ? (
-        <EmployeeModal
-          employee={selectedEmployee}
-          onClose={() => setSelectedEmployee(null)}
-          formatDate={formatDateEn}
-          formatIDR={formatIDR}
-        />
-      ) : null}
     </div>
   );
 }

@@ -1,12 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { BasicEmployeeRow } from "./types";
 
 type Props = {
   loading: boolean;
   employees: BasicEmployeeRow[];
   rows: BasicEmployeeRow[];
-  onSelect: (e: BasicEmployeeRow) => void;
   formatDate: (iso: string | null | undefined) => string;
 };
 
@@ -14,7 +14,6 @@ export default function EmployeesTable({
   loading,
   employees,
   rows,
-  onSelect,
   formatDate,
 }: Props) {
   return (
@@ -49,12 +48,15 @@ export default function EmployeesTable({
             rows.map((e) => (
               <tr
                 key={e.uuid}
-                className="border-t border-[var(--ikkimo-border)] hover:bg-[var(--ikkimo-brand-hover)] cursor-pointer"
-                onClick={() => onSelect(e)}
+                className="border-t border-[var(--ikkimo-border)] hover:bg-[var(--ikkimo-brand-hover)]"
               >
                 <td className="px-5 py-3">{e.internal_no}</td>
                 <td className="px-5 py-3">{e.employee_code}</td>
-                <td className="px-5 py-3">{e.preferred_name ?? "-"}</td>
+                <td className="px-5 py-3">
+                  <Link className="block hover:underline" href={`/employee/${e.uuid}`}>
+                    {e.preferred_name ?? "-"}
+                  </Link>
+                </td>
                 <td className="px-5 py-3">{e.employee_name}</td>
                 <td className="px-5 py-3">{e.department ?? "-"}</td>
                 <td className="px-5 py-3">{e.position ?? "-"}</td>
