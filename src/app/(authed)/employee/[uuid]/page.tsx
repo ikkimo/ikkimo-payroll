@@ -2,7 +2,6 @@
 
 export const dynamic = "force-dynamic";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -72,61 +71,40 @@ export default function EmployeePage() {
     };
   }, [router, uuid]);
 
-  async function logout() {
-    await supabase.auth.signOut();
-    router.replace("/login");
-  }
+  // async function logout() {
+  //   await supabase.auth.signOut();
+  //   router.replace("/login");
+  // }
 
   return (
-    <div className="min-h-screen bg-[var(--ikkimo-bg)] text-[var(--ikkimo-text)]">
-      <header className="border-b border-[var(--ikkimo-border)] bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-3">
-            <Image src="/ikkimo_logo.png" alt="iKKim’O" width={36} height={36} priority />
+    <>
+      <div className="mb-4">
+        <Link className="text-sm hover:underline" href="/home">
+          ← Back to employees
+        </Link>
+      </div>
+
+      <section className="rounded-2xl border border-[var(--ikkimo-border)] bg-white p-6">
+        {loading ? (
+          <div className="text-sm">Loading…</div>
+        ) : error ? (
+          <div className="text-sm">Error: {error}</div>
+        ) : !employee ? (
+          <div className="text-sm">Employee not found.</div>
+        ) : (
+          <>
             <div>
-              <div className="text-sm font-semibold">iKKim’O Payroll</div>
-              <div className="text-xs">{email}</div>
-            </div>
-          </div>
-
-          <button
-            onClick={logout}
-            className="rounded-xl border border-[var(--ikkimo-border)] bg-white px-4 py-2 text-sm hover:border-[var(--ikkimo-brand)]"
-          >
-            Logout
-          </button>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-6xl px-6 py-6">
-        <div className="mb-4">
-          <Link className="text-sm hover:underline" href="/home">
-            ← Back to employees
-          </Link>
-        </div>
-
-        <section className="rounded-2xl border border-[var(--ikkimo-border)] bg-white p-6">
-          {loading ? (
-            <div className="text-sm">Loading…</div>
-          ) : error ? (
-            <div className="text-sm">Error: {error}</div>
-          ) : !employee ? (
-            <div className="text-sm">Employee not found.</div>
-          ) : (
-            <>
-              <div>
-                <div className="text-lg font-semibold">{employee.employee_name}</div>
-                <div className="mt-0.5 text-sm">{employee.preferred_name ?? "-"}</div>
-                <div className="mt-1 text-sm">
-                  No ID Karyawan: <span className="font-medium">{employee.employee_code}</span>
-                </div>
+              <div className="text-lg font-semibold">{employee.employee_name}</div>
+              <div className="mt-0.5 text-sm">{employee.preferred_name ?? "-"}</div>
+              <div className="mt-1 text-sm">
+                No ID Karyawan: <span className="font-medium">{employee.employee_code}</span>
               </div>
+            </div>
 
-              <EmployeeDetails employee={employee} formatDate={formatDateEn} formatIDR={formatIDR} />
-            </>
-          )}
-        </section>
-      </main>
-    </div>
+            <EmployeeDetails employee={employee} formatDate={formatDateEn} formatIDR={formatIDR} />
+          </>
+        )}
+      </section>
+    </>
   );
 }
