@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { BasicEmployeeRow } from "./types";
 
 type Props = {
@@ -48,15 +47,14 @@ export default function EmployeesTable({
             rows.map((e) => (
               <tr
                 key={e.uuid}
-                className="border-t border-[var(--ikkimo-border)] hover:bg-[var(--ikkimo-brand-hover)]"
+                className="border-t border-[var(--ikkimo-border)] hover:bg-[var(--ikkimo-brand-hover)] cursor-pointer"
+                onClick={() => {
+                  window.location.href = `/employee/${e.uuid}`;
+                }}
               >
                 <td className="px-5 py-3">{e.internal_no}</td>
                 <td className="px-5 py-3">{e.employee_code}</td>
-                <td className="px-5 py-3">
-                  <Link className="block hover:underline" href={`/employee/${e.uuid}`}>
-                    {e.preferred_name ?? "-"}
-                  </Link>
-                </td>
+                <td className="px-5 py-3">{e.preferred_name ?? "-"}</td>
                 <td className="px-5 py-3">{e.employee_name}</td>
                 <td className="px-5 py-3">{e.department ?? "-"}</td>
                 <td className="px-5 py-3">{e.position ?? "-"}</td>
