@@ -2,7 +2,7 @@
 
 export const dynamic = "force-dynamic";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -70,12 +70,32 @@ export default function SettingsPage() {
   const [dirty, setDirty] = useState(false);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
 
+  const [editing, setEditing] = useState(false);
+  const [snapshot, setSnapshot] = useState<PayrollSettingsRow | null>(null);
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmPhrase, setConfirmPhrase] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordVerified, setPasswordVerified] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+
+  const DANGER_PHRASE = "UPDATE PAYROLL SETTINGS";
+
+  const phraseOk = useMemo(
+    () => confirmPhrase.trim() === DANGER_PHRASE,
+    [confirmPhrase]
+  );
+
   useEffect(() => {
     let alive = true;
 
     (async () => {
       setLoading(true);
       setError(null);
+      setEditing(false);
+      setSnapshot(null);
+      setDirty(false);
+      setSavedMsg(null);
 
       const { data } = await supabase.auth.getSession();
       const session = data.session;
@@ -116,6 +136,9 @@ export default function SettingsPage() {
           setRow(null);
         } else {
           setRow((insertRes.data as unknown as PayrollSettingsRow) ?? null);
+          setEditing(false);
+          setSnapshot(null);
+          setDirty(false);
         }
 
         setLoading(false);
@@ -123,6 +146,9 @@ export default function SettingsPage() {
       }
 
       setRow((res.data as unknown as PayrollSettingsRow) ?? null);
+      setEditing(false);
+      setSnapshot(null);
+      setDirty(false);
       setLoading(false);
     })();
 
@@ -135,6 +161,8 @@ export default function SettingsPage() {
     key: K,
     value: PayrollSettingsRow[K]
   ) {
+    if (!editing) return;
+
     setRow((prev) => {
       if (!prev) return prev;
       return { ...prev, [key]: value };
@@ -143,7 +171,64 @@ export default function SettingsPage() {
     setSavedMsg(null);
   }
 
-  async function save() {
+  function startEdit() {
+    if (!row) return;
+    setSnapshot(row);
+    setEditing(true);
+    setDirty(false);
+    setSavedMsg(null);
+    setError(null);
+  }
+
+  function cancelEdit() {
+    setRow(snapshot);
+    setEditing(false);
+    setDirty(false);
+    setSavedMsg(null);
+    setError(null);
+    setConfirmOpen(false);
+    setConfirmPhrase("");
+    setConfirmPassword("");
+    setPasswordVerified(false);
+    setConfirmError(null);
+  }
+
+  function requestSave() {
+    if (!row) return;
+    setConfirmOpen(true);
+    setConfirmPhrase("");
+    setConfirmPassword("");
+    setPasswordVerified(false);
+    setConfirmError(null);
+  }
+
+  async function verifyPassword() {
+    setConfirmError(null);
+
+    const pwd = confirmPassword;
+    if (!pwd) {
+      setConfirmError("Enter your password to verify.");
+      return;
+    }
+
+    // Works only for email/password accounts. If you use a different auth method,
+    // the phrase confirmation is the fallback.
+    const { error: authErr } = await supabase.auth.signInWithPassword({
+      email,
+      password: pwd,
+    });
+
+    if (authErr) {
+      setPasswordVerified(false);
+      setConfirmError(authErr.message);
+      return;
+    }
+
+    setPasswordVerified(true);
+    setConfirmPassword("");
+  }
+
+  async function commitSave() {
     if (!row) return;
 
     setSaving(true);
@@ -170,6 +255,8 @@ export default function SettingsPage() {
 
     setRow((res.data as unknown as PayrollSettingsRow) ?? null);
     setDirty(false);
+    setEditing(false);
+    setSnapshot(null);
     setSaving(false);
     setSavedMsg("Saved.");
   }
@@ -185,13 +272,34 @@ export default function SettingsPage() {
 
           <div className="flex items-center gap-3">
             {savedMsg ? <div className="text-xs">{savedMsg}</div> : null}
-            <button
-              onClick={save}
-              disabled={loading || saving || !row || !dirty}
-              className="rounded-xl bg-[var(--ikkimo-brand)] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {saving ? "Saving…" : "Save"}
-            </button>
+
+            {!editing ? (
+              <button
+                onClick={startEdit}
+                disabled={loading || !row}
+                className="rounded-xl border border-[var(--ikkimo-border)] bg-white px-4 py-2 text-sm hover:border-[var(--ikkimo-brand)] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Edit
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={cancelEdit}
+                  disabled={saving}
+                  className="rounded-xl border border-[var(--ikkimo-border)] bg-white px-4 py-2 text-sm hover:border-[var(--ikkimo-brand)] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  onClick={requestSave}
+                  disabled={loading || saving || !row || !dirty}
+                  className="rounded-xl bg-[var(--ikkimo-brand)] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {saving ? "Saving…" : "Save"}
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -214,6 +322,7 @@ export default function SettingsPage() {
                 min={1}
                 max={31}
                 onChange={(v) => updateField("standard_working_days", v)}
+                disabled={!editing}
               />
               <NumberField
                 label="Hours per day"
@@ -222,6 +331,7 @@ export default function SettingsPage() {
                 min={1}
                 max={24}
                 onChange={(v) => updateField("hours_per_day", v)}
+                disabled={!editing}
               />
             </Section>
 
@@ -232,24 +342,28 @@ export default function SettingsPage() {
                 value={row.overtime1_multiplier}
                 step={0.001}
                 onChange={(v) => updateField("overtime1_multiplier", v)}
+                disabled={!editing}
               />
               <NumberField
                 label="Overtime 2 multiplier"
                 value={row.overtime2_multiplier}
                 step={0.001}
                 onChange={(v) => updateField("overtime2_multiplier", v)}
+                disabled={!editing}
               />
               <NumberField
                 label="Overtime 3 multiplier"
                 value={row.overtime3_multiplier}
                 step={0.001}
                 onChange={(v) => updateField("overtime3_multiplier", v)}
+                disabled={!editing}
               />
               <NumberField
                 label="THR multiplier"
                 value={row.thr}
                 step={0.001}
                 onChange={(v) => updateField("thr", v)}
+                disabled={!editing}
               />
               <HelperText>
                 Store as multipliers (e.g. 1.5, 2.0).
@@ -263,12 +377,14 @@ export default function SettingsPage() {
                 value={row.bpjs_employee_jht}
                 step={0.000001}
                 onChange={(v) => updateField("bpjs_employee_jht", v)}
+                disabled={!editing}
               />
               <NumberField
                 label="JP (employee)"
                 value={row.bpjs_employee_jp}
                 step={0.000001}
                 onChange={(v) => updateField("bpjs_employee_jp", v)}
+                disabled={!editing}
               />
               <HelperText>Example: 2% = 0.02</HelperText>
             </Section>
@@ -280,30 +396,58 @@ export default function SettingsPage() {
                 value={row.bpjs_company_jht}
                 step={0.000001}
                 onChange={(v) => updateField("bpjs_company_jht", v)}
+                disabled={!editing}
               />
               <NumberField
                 label="JKM (company)"
                 value={row.bpjs_company_jkm}
                 step={0.000001}
                 onChange={(v) => updateField("bpjs_company_jkm", v)}
+                disabled={!editing}
               />
               <NumberField
                 label="JKK (company)"
                 value={row.bpjs_company_jkk}
                 step={0.000001}
                 onChange={(v) => updateField("bpjs_company_jkk", v)}
+                disabled={!editing}
               />
               <NumberField
                 label="JP (company)"
                 value={row.bpjs_company_jp}
                 step={0.000001}
                 onChange={(v) => updateField("bpjs_company_jp", v)}
+                disabled={!editing}
               />
               <HelperText>Example: 3.7% = 0.037</HelperText>
             </Section>
           </div>
         )}
       </div>
+
+      {confirmOpen ? (
+        <ConfirmSaveModal
+          phrase={confirmPhrase}
+          setPhrase={setConfirmPhrase}
+          password={confirmPassword}
+          setPassword={setConfirmPassword}
+          phraseOk={phraseOk}
+          passwordVerified={passwordVerified}
+          verifyPassword={verifyPassword}
+          error={confirmError}
+          onCancel={() => setConfirmOpen(false)}
+          onConfirm={async () => {
+            if (!(phraseOk || passwordVerified)) {
+              setConfirmError(
+                `Type "${DANGER_PHRASE}" or verify your password to continue.`
+              );
+              return;
+            }
+            setConfirmOpen(false);
+            await commitSave();
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -327,23 +471,121 @@ function NumberField(props: {
   step: number;
   min?: number;
   max?: number;
+  disabled?: boolean;
   onChange: (v: number) => void;
 }) {
-  const { label, value, step, min, max, onChange } = props;
+  const { label, value, step, min, max, disabled, onChange } = props;
 
   return (
     <label className="block">
       <div className="text-xs font-semibold">{label}</div>
       <input
-        className="mt-1 w-full rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
+        className="mt-1 w-full rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)] disabled:cursor-not-allowed disabled:opacity-60"
         type="number"
         value={Number.isFinite(value) ? String(value) : "0"}
         step={step}
         min={min}
         max={max}
+        disabled={disabled}
         onChange={(e) => onChange(toNumber(e.target.value, value))}
       />
     </label>
+  );
+}
+
+function ConfirmSaveModal(props: {
+  phrase: string;
+  setPhrase: (v: string) => void;
+  password: string;
+  setPassword: (v: string) => void;
+  phraseOk: boolean;
+  passwordVerified: boolean;
+  verifyPassword: () => Promise<void>;
+  error: string | null;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const {
+    phrase,
+    setPhrase,
+    password,
+    setPassword,
+    phraseOk,
+    passwordVerified,
+    verifyPassword,
+    error,
+    onCancel,
+    onConfirm,
+  } = props;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4" aria-modal="true" role="dialog">
+      <button className="absolute inset-0 bg-black/30" aria-label="Close" onClick={onCancel} />
+
+      <div className="relative w-full max-w-lg rounded-2xl border border-[var(--ikkimo-border)] bg-white p-6 shadow-lg">
+        <div className="text-lg font-semibold">Confirm changes</div>
+        <div className="mt-2 text-sm">
+          These settings affect payroll calculations. Only continue if you are sure.
+        </div>
+
+        <div className="mt-5 space-y-4">
+          <div className="rounded-xl border border-[var(--ikkimo-border)] p-4">
+            <div className="text-xs font-semibold">Option A: type the confirmation phrase</div>
+            <div className="mt-2 text-xs">Type: <span className="font-semibold">UPDATE PAYROLL SETTINGS</span></div>
+            <input
+              className="mt-2 w-full rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
+              value={phrase}
+              onChange={(e) => setPhrase(e.target.value)}
+              placeholder="UPDATE PAYROLL SETTINGS"
+            />
+            {phraseOk ? <div className="mt-2 text-xs">Phrase confirmed.</div> : null}
+          </div>
+
+          <div className="rounded-xl border border-[var(--ikkimo-border)] p-4">
+            <div className="text-xs font-semibold">Option B: verify your password</div>
+            <div className="mt-2 text-xs">Only works for email/password accounts.</div>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+              <input
+                className="w-full flex-1 rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password"
+                autoComplete="current-password"
+              />
+              <button
+                onClick={verifyPassword}
+                className="rounded-xl border border-[var(--ikkimo-border)] bg-white px-4 py-2 text-sm hover:border-[var(--ikkimo-brand)]"
+              >
+                Verify
+              </button>
+            </div>
+            {passwordVerified ? <div className="mt-2 text-xs">Password verified.</div> : null}
+          </div>
+
+          {error ? (
+            <div className="text-sm">
+              Error: <span className="font-medium">{error}</span>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="mt-6 flex items-center justify-end gap-3">
+          <button
+            onClick={onCancel}
+            className="rounded-xl border border-[var(--ikkimo-border)] bg-white px-4 py-2 text-sm hover:border-[var(--ikkimo-brand)]"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="rounded-xl bg-[var(--ikkimo-brand)] px-4 py-2 text-sm font-semibold text-white"
+          >
+            Confirm save
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
