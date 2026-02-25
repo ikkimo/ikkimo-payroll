@@ -51,7 +51,7 @@ export function EmployeeDetails({ employee, formatDate }: DetailsProps) {
       />
       <InfoCard
         label="Base salary (IDR)"
-        value={formatIDR(employee.base_salary)}
+        value={formatIDR(employee.basic)}
         className="sm:col-span-2"
       />
       <InfoCard

@@ -7,7 +7,7 @@ export type BasicEmployeeRow = {
   department: string | null;
   start_date: string | null;
   active: boolean;
-  base_salary: number;
+  basic: number;
   current_salary?: number | null;
 
   fingerprint_id?: string | null;
