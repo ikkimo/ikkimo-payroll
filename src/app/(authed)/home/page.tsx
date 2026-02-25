@@ -89,7 +89,7 @@ export default function HomePage() {
         e.employee_code,
         String(e.internal_no ?? ""),
         e.department ?? "",
-        e.position ?? "",
+        e.positions?.name ?? "",
       ]
         .join(" ")
         .toLowerCase();
@@ -122,7 +122,7 @@ export default function HomePage() {
             sensitivity: "base",
           });
         case "position":
-          return safeStr(a.position).localeCompare(safeStr(b.position), "en", {
+          return safeStr(a.positions?.name).localeCompare(safeStr(b.positions?.name), "en", {
             sensitivity: "base",
           });
         case "start_date": {
@@ -160,7 +160,7 @@ export default function HomePage() {
       const employeesPromise = supabase
         .from("employees")
         .select(
-          "uuid, internal_no, employee_code, preferred_name, employee_name, department, position, start_date, active, base_salary, current_salary, seniority_grades(grade, increase_monthly_idr), skill_grades(position, level, increase_monthly_idr)"
+          "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, base_salary, current_salary, fingerprint_id, probation, position_id, positions:positions!employees_position_id_fkey(id, name, allowance_idr), seniority_grades:seniority_grades!employees_seniority_grade_id_fkey(grade, increase_monthly_idr), skill_grades:skill_grades!employees_skill_grade_id_fkey(level, increase_monthly_idr, position_id)"
         )
         .eq("active", true)
         .order("internal_no", { ascending: true })
@@ -176,7 +176,8 @@ export default function HomePage() {
         console.error(empRes.error);
         setEmployees([]);
       } else {
-        setEmployees(empRes.data ?? []);
+        const rows = (empRes.data ?? []) as unknown as BasicEmployeeRow[];
+        setEmployees(rows);
       }
 
       // Payroll period: prefer current year/month; fall back to latest.

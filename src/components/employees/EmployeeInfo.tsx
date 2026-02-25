@@ -2,6 +2,7 @@
 
 import React from "react";
 import { BasicEmployeeRow } from "./types";
+import { formatIDR } from "@/lib/formatters";
 
 type InfoCardProps = {
   label: string;
@@ -25,25 +26,26 @@ function InfoCard({ label, value, className }: InfoCardProps) {
 type DetailsProps = {
   employee: BasicEmployeeRow;
   formatDate: (iso: string | null | undefined) => string;
-  formatIDR: (n: number | null | undefined) => string;
 };
 
-export function EmployeeDetails({ employee, formatDate, formatIDR }: DetailsProps) {
+export function EmployeeDetails({ employee, formatDate }: DetailsProps) {
   return (
     <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
       <InfoCard label="Department" value={employee.department ?? "-"} />
-      <InfoCard label="Position" value={employee.position ?? "-"} />
+      <InfoCard
+        label="Position"
+        value={employee.positions?.name ?? "-"}
+      />
       <InfoCard
         label="Seniority grade"
-        value={employee.seniority_grades?.[0]?.grade ?? "-"}
+        value={employee.seniority_grades?.grade ?? "-"}
       />
       <InfoCard
         label="Skill grade"
         value={
-          employee.skill_grades?.[0]?.position &&
-          employee.skill_grades?.[0]?.level !== null &&
-          employee.skill_grades?.[0]?.level !== undefined
-            ? `${employee.skill_grades[0].position} L${employee.skill_grades[0].level}`
+          employee.skill_grades?.level !== null &&
+          employee.skill_grades?.level !== undefined
+            ? `L${employee.skill_grades.level}`
             : "-"
         }
       />
@@ -65,14 +67,12 @@ type ModalProps = {
   employee: BasicEmployeeRow;
   onClose: () => void;
   formatDate: (iso: string | null | undefined) => string;
-  formatIDR: (n: number | null | undefined) => string;
 };
 
 export default function EmployeeModal({
   employee,
   onClose,
   formatDate,
-  formatIDR,
 }: ModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4" aria-modal="true" role="dialog">
@@ -96,7 +96,7 @@ export default function EmployeeModal({
           </button>
         </div>
 
-        <EmployeeDetails employee={employee} formatDate={formatDate} formatIDR={formatIDR} />
+        <EmployeeDetails employee={employee} formatDate={formatDate} />
 
         <div className="mt-5 text-xs">
           Tip: press <span className="font-semibold">Esc</span> to close.

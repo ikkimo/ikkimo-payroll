@@ -52,12 +52,12 @@ export default function EmployeesTable({
                   window.location.href = `/employee/${e.uuid}`;
                 }}
               >
-                <td className="px-5 py-3">{e.internal_no}</td>
+                <td className="px-5 py-3">{e.internal_no ?? "-"}</td>
                 <td className="px-5 py-3">{e.employee_code}</td>
                 <td className="px-5 py-3">{e.preferred_name ?? "-"}</td>
                 <td className="px-5 py-3">{e.employee_name}</td>
                 <td className="px-5 py-3">{e.department ?? "-"}</td>
-                <td className="px-5 py-3">{e.position ?? "-"}</td>
+                <td className="px-5 py-3">{e.positions?.name ?? "-"}</td>
                 <td className="px-5 py-3">{formatDate(e.start_date)}</td>
               </tr>
             ))

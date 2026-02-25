@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import type { BasicEmployeeRow } from "@/components/employees/types";
+
 import { EmployeeDetails } from "@/components/employees/EmployeeInfo";
 
 const formatDateEn = (iso: string | null | undefined): string => {
@@ -18,15 +19,11 @@ const formatDateEn = (iso: string | null | undefined): string => {
   }).format(new Date(iso));
 };
 
-const formatIDR = (value: number | null | undefined): string =>
-  new Intl.NumberFormat("id-ID").format(value ?? 0);
 
 export default function EmployeePage() {
   const router = useRouter();
-  const params = useParams<{ uuid: string }>();
-  const uuid = params.uuid;
+  const { uuid } = useParams<{ uuid: string }>();
 
-  const [email, setEmail] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [employee, setEmployee] = useState<BasicEmployeeRow | null>(null);
@@ -44,12 +41,11 @@ export default function EmployeePage() {
       }
 
       if (!alive) return;
-      setEmail(session.user.email ?? "");
 
       const res = await supabase
         .from("employees")
         .select(
-          "uuid, internal_no, employee_code, preferred_name, employee_name, department, position, start_date, active, base_salary, current_salary, seniority_grades(grade, increase_monthly_idr), skill_grades(position, level, increase_monthly_idr)"
+          "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, base_salary, current_salary, seniority_grades(grade, increase_monthly_idr), skill_grades(level, increase_monthly_idr), positions(name, allowance_idr)"
         )
         .eq("uuid", uuid)
         .maybeSingle();
@@ -101,7 +97,7 @@ export default function EmployeePage() {
               </div>
             </div>
 
-            <EmployeeDetails employee={employee} formatDate={formatDateEn} formatIDR={formatIDR} />
+            <EmployeeDetails employee={employee} formatDate={formatDateEn} />
           </>
         )}
       </section>
