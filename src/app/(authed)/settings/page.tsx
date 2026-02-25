@@ -2,32 +2,11 @@
 
 export const dynamic = "force-dynamic";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-
-type PayrollSettingsRow = {
-  id: string;
-  standard_working_days: number;
-  hours_per_day: number;
-
-  bpjs_employee_jht: number;
-  bpjs_employee_jp: number;
-
-  bpjs_company_jht: number;
-  bpjs_company_jkm: number;
-  bpjs_company_jkk: number;
-  bpjs_company_jp: number;
-
-  overtime1_multiplier: number;
-  overtime2_multiplier: number;
-  overtime3_multiplier: number;
-
-  thr: number;
-
-  created_at?: string;
-  updated_at?: string;
-};
+import { formatIDR } from "@/lib/formatters";
+import type { PayrollSettingsRow, PositionRow, SkillGradeRow, SeniorityGradeRow } from "@/components/settings/types";
 
 const SETTINGS_SELECT = [
   "id",
@@ -47,10 +26,15 @@ const SETTINGS_SELECT = [
   "updated_at",
 ].join(", ");
 
+const POSITIONS_SELECT = ["id", "name", "allowance_idr", "created_at", "updated_at"].join(", ");
+const SKILL_GRADES_SELECT = ["id", "position_id", "level", "increase_monthly_idr", "notes", "created_at"].join(", ");
+const SENIORITY_GRADES_SELECT = ["id", "grade", "increase_monthly_idr", "created_at"].join(", ");
+
 function toNumber(value: string, fallback: number) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
 }
+
 
 function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n));
@@ -61,6 +45,9 @@ export default function SettingsPage() {
   // We don't have a generated Supabase `Database` type in this repo yet, so keep the
   // query builder untyped and cast `data` at the edges.
   const settingsTable = supabase.from("payroll_settings");
+  const positionsTable = supabase.from("positions");
+  const skillGradesTable = supabase.from("skill_grades");
+  const seniorityGradesTable = supabase.from("seniority_grades");
 
   const [email, setEmail] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -69,6 +56,48 @@ export default function SettingsPage() {
   const [row, setRow] = useState<PayrollSettingsRow | null>(null);
   const [dirty, setDirty] = useState(false);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
+
+  // --- Positions / grades editors ---
+  const [positions, setPositions] = useState<PositionRow[]>([]);
+  const [positionsLoading, setPositionsLoading] = useState(false);
+  const [positionsError, setPositionsError] = useState<string | null>(null);
+
+  const [skillGrades, setSkillGrades] = useState<SkillGradeRow[]>([]);
+  const [skillGradesLoading, setSkillGradesLoading] = useState(false);
+  const [skillGradesError, setSkillGradesError] = useState<string | null>(null);
+
+  const [seniorityGrades, setSeniorityGrades] = useState<SeniorityGradeRow[]>([]);
+  const [seniorityGradesLoading, setSeniorityGradesLoading] = useState(false);
+  const [seniorityGradesError, setSeniorityGradesError] = useState<string | null>(null);
+
+  // Create forms
+  const [newPositionName, setNewPositionName] = useState("");
+  const [newPositionAllowance, setNewPositionAllowance] = useState(0);
+
+  const [newSkillPositionId, setNewSkillPositionId] = useState<string>("");
+  const [newSkillLevel, setNewSkillLevel] = useState(1);
+  const [newSkillIncrease, setNewSkillIncrease] = useState(0);
+
+  const [newSeniorityGrade, setNewSeniorityGrade] = useState(0);
+  const [newSeniorityIncrease, setNewSeniorityIncrease] = useState(0);
+
+  // Skill grades modal (managed per position)
+  const [skillModalOpen, setSkillModalOpen] = useState(false);
+  const [skillModalPositionId, setSkillModalPositionId] = useState<string | null>(null);
+
+  // Per-row edit buffers
+  const [editingPositionId, setEditingPositionId] = useState<string | null>(null);
+  const [positionEditName, setPositionEditName] = useState("");
+  const [positionEditAllowance, setPositionEditAllowance] = useState(0);
+
+  const [editingSkillId, setEditingSkillId] = useState<string | null>(null);
+  const [skillEditPositionId, setSkillEditPositionId] = useState<string>("");
+  const [skillEditLevel, setSkillEditLevel] = useState(1);
+  const [skillEditIncrease, setSkillEditIncrease] = useState(0);
+
+  const [editingSeniorityId, setEditingSeniorityId] = useState<string | null>(null);
+  const [seniorityEditGrade, setSeniorityEditGrade] = useState(0);
+  const [seniorityEditIncrease, setSeniorityEditIncrease] = useState(0);
 
   const [editing, setEditing] = useState(false);
   const [snapshot, setSnapshot] = useState<PayrollSettingsRow | null>(null);
@@ -105,6 +134,51 @@ export default function SettingsPage() {
 
       if (!alive) return;
       setEmail(session.user.email ?? "");
+
+      // Load positions / grades for settings editors.
+      setPositionsLoading(true);
+      setSkillGradesLoading(true);
+      setSeniorityGradesLoading(true);
+      setPositionsError(null);
+      setSkillGradesError(null);
+      setSeniorityGradesError(null);
+
+      const [posRes, skillRes, senRes] = await Promise.all([
+        positionsTable.select(POSITIONS_SELECT).order("name", { ascending: true }),
+        skillGradesTable
+          .select(SKILL_GRADES_SELECT)
+          .order("position_id", { ascending: true })
+          .order("level", { ascending: true }),
+        seniorityGradesTable.select(SENIORITY_GRADES_SELECT).order("grade", { ascending: true }),
+      ]);
+
+      if (!alive) return;
+
+      if (posRes.error) {
+        setPositionsError(posRes.error.message);
+        setPositions([]);
+      } else {
+        const list = (posRes.data as unknown as PositionRow[]) ?? [];
+        setPositions(list);
+        if (list[0] && !newSkillPositionId) setNewSkillPositionId(list[0].id);
+      }
+      setPositionsLoading(false);
+
+      if (skillRes.error) {
+        setSkillGradesError(skillRes.error.message);
+        setSkillGrades([]);
+      } else {
+        setSkillGrades((skillRes.data as unknown as SkillGradeRow[]) ?? []);
+      }
+      setSkillGradesLoading(false);
+
+      if (senRes.error) {
+        setSeniorityGradesError(senRes.error.message);
+        setSeniorityGrades([]);
+      } else {
+        setSeniorityGrades((senRes.data as unknown as SeniorityGradeRow[]) ?? []);
+      }
+      setSeniorityGradesLoading(false);
 
       // Fetch existing settings row (treat as singleton).
       const res = await settingsTable
@@ -257,6 +331,276 @@ export default function SettingsPage() {
     setSnapshot(null);
     setSaving(false);
     setSavedMsg("Saved.");
+  }
+
+  const positionsById = useMemo(() => {
+    const m = new Map<string, PositionRow>();
+    for (const p of positions) m.set(p.id, p);
+    return m;
+  }, [positions]);
+
+  const skillCountByPositionId = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const s of skillGrades) m.set(s.position_id, (m.get(s.position_id) ?? 0) + 1);
+    return m;
+  }, [skillGrades]);
+  function openSkillModal(positionId: string) {
+    setSkillModalPositionId(positionId);
+    setNewSkillPositionId(positionId);
+    cancelEditSkill();
+    setSkillGradesError(null);
+    setSkillModalOpen(true);
+  }
+
+  function closeSkillModal() {
+    setSkillModalOpen(false);
+    setSkillModalPositionId(null);
+    cancelEditSkill();
+    setSkillGradesError(null);
+  }
+
+  async function refreshPositions() {
+    setPositionsLoading(true);
+    setPositionsError(null);
+    const res = await positionsTable.select(POSITIONS_SELECT).order("name", { ascending: true });
+    if (res.error) {
+      setPositionsError(res.error.message);
+      setPositions([]);
+    } else {
+      setPositions((res.data as unknown as PositionRow[]) ?? []);
+    }
+    setPositionsLoading(false);
+  }
+
+  async function refreshSkillGrades() {
+    setSkillGradesLoading(true);
+    setSkillGradesError(null);
+    const res = await skillGradesTable
+      .select(SKILL_GRADES_SELECT)
+      .order("position_id", { ascending: true })
+      .order("level", { ascending: true });
+    if (res.error) {
+      setSkillGradesError(res.error.message);
+      setSkillGrades([]);
+    } else {
+      setSkillGrades((res.data as unknown as SkillGradeRow[]) ?? []);
+    }
+    setSkillGradesLoading(false);
+  }
+
+  async function refreshSeniorityGrades() {
+    setSeniorityGradesLoading(true);
+    setSeniorityGradesError(null);
+    const res = await seniorityGradesTable.select(SENIORITY_GRADES_SELECT).order("grade", { ascending: true });
+    if (res.error) {
+      setSeniorityGradesError(res.error.message);
+      setSeniorityGrades([]);
+    } else {
+      setSeniorityGrades((res.data as unknown as SeniorityGradeRow[]) ?? []);
+    }
+    setSeniorityGradesLoading(false);
+  }
+
+  // --- Positions ---
+  async function addPosition() {
+    const name = newPositionName.trim();
+    if (!name) {
+      setPositionsError("Position name is required.");
+      return;
+    }
+    setPositionsError(null);
+    const res = await positionsTable.insert({ name, allowance_idr: newPositionAllowance }).select(POSITIONS_SELECT).single();
+    if (res.error) {
+      setPositionsError(res.error.message);
+      return;
+    }
+    setNewPositionName("");
+    setNewPositionAllowance(0);
+    await refreshPositions();
+  }
+
+  function startEditPosition(p: PositionRow) {
+    setEditingPositionId(p.id);
+    setPositionEditName(p.name);
+    setPositionEditAllowance(p.allowance_idr);
+  }
+
+  function cancelEditPosition() {
+    setEditingPositionId(null);
+    setPositionEditName("");
+    setPositionEditAllowance(0);
+  }
+
+  async function saveEditPosition() {
+    if (!editingPositionId) return;
+    const name = positionEditName.trim();
+    if (!name) {
+      setPositionsError("Position name is required.");
+      return;
+    }
+    setPositionsError(null);
+    const res = await positionsTable
+      .update({ name, allowance_idr: positionEditAllowance })
+      .eq("id", editingPositionId)
+      .select(POSITIONS_SELECT)
+      .single();
+
+    if (res.error) {
+      setPositionsError(res.error.message);
+      return;
+    }
+
+    cancelEditPosition();
+    await refreshPositions();
+  }
+
+  async function deletePosition(id: string) {
+    setPositionsError(null);
+    const res = await positionsTable.delete().eq("id", id);
+    if (res.error) {
+      setPositionsError(res.error.message);
+      return;
+    }
+    if (editingPositionId === id) cancelEditPosition();
+    await refreshPositions();
+    await refreshSkillGrades();
+  }
+
+  // --- Skill grades ---
+  async function addSkillGrade(positionIdOverride?: string) {
+    const pid = positionIdOverride ?? newSkillPositionId;
+    if (!pid) {
+      setSkillGradesError("Select a position.");
+      return;
+    }
+    const level = clamp(Math.trunc(newSkillLevel), 1, 99);
+    setSkillGradesError(null);
+
+    const res = await skillGradesTable
+      .insert({ position_id: pid, level, increase_monthly_idr: newSkillIncrease })
+      .select(SKILL_GRADES_SELECT)
+      .single();
+
+    if (res.error) {
+      setSkillGradesError(res.error.message);
+      return;
+    }
+
+    setNewSkillLevel(1);
+    setNewSkillIncrease(0);
+    await refreshSkillGrades();
+  }
+
+  function startEditSkill(s: SkillGradeRow) {
+    setEditingSkillId(s.id);
+    setSkillEditPositionId(s.position_id);
+    setSkillEditLevel(s.level);
+    setSkillEditIncrease(s.increase_monthly_idr);
+  }
+
+  function cancelEditSkill() {
+    setEditingSkillId(null);
+    setSkillEditPositionId("");
+    setSkillEditLevel(1);
+    setSkillEditIncrease(0);
+  }
+
+  async function saveEditSkill() {
+    if (!editingSkillId) return;
+    if (!skillEditPositionId) {
+      setSkillGradesError("Select a position.");
+      return;
+    }
+    const level = clamp(Math.trunc(skillEditLevel), 1, 99);
+    setSkillGradesError(null);
+
+    const res = await skillGradesTable
+      .update({ position_id: skillEditPositionId, level, increase_monthly_idr: skillEditIncrease })
+      .eq("id", editingSkillId)
+      .select(SKILL_GRADES_SELECT)
+      .single();
+
+    if (res.error) {
+      setSkillGradesError(res.error.message);
+      return;
+    }
+
+    cancelEditSkill();
+    await refreshSkillGrades();
+  }
+
+  async function deleteSkill(id: string) {
+    setSkillGradesError(null);
+    const res = await skillGradesTable.delete().eq("id", id);
+    if (res.error) {
+      setSkillGradesError(res.error.message);
+      return;
+    }
+    if (editingSkillId === id) cancelEditSkill();
+    await refreshSkillGrades();
+  }
+
+  // --- Seniority grades ---
+  async function addSeniorityGrade() {
+    const grade = clamp(Math.trunc(newSeniorityGrade), 0, 999);
+    setSeniorityGradesError(null);
+
+    const res = await seniorityGradesTable
+      .insert({ grade, increase_monthly_idr: newSeniorityIncrease })
+      .select(SENIORITY_GRADES_SELECT)
+      .single();
+
+    if (res.error) {
+      setSeniorityGradesError(res.error.message);
+      return;
+    }
+
+    setNewSeniorityGrade(0);
+    setNewSeniorityIncrease(0);
+    await refreshSeniorityGrades();
+  }
+
+  function startEditSeniority(s: SeniorityGradeRow) {
+    setEditingSeniorityId(s.id);
+    setSeniorityEditGrade(s.grade);
+    setSeniorityEditIncrease(s.increase_monthly_idr);
+  }
+
+  function cancelEditSeniority() {
+    setEditingSeniorityId(null);
+    setSeniorityEditGrade(0);
+    setSeniorityEditIncrease(0);
+  }
+
+  async function saveEditSeniority() {
+    if (!editingSeniorityId) return;
+    const grade = clamp(Math.trunc(seniorityEditGrade), 0, 999);
+    setSeniorityGradesError(null);
+
+    const res = await seniorityGradesTable
+      .update({ grade, increase_monthly_idr: seniorityEditIncrease })
+      .eq("id", editingSeniorityId)
+      .select(SENIORITY_GRADES_SELECT)
+      .single();
+
+    if (res.error) {
+      setSeniorityGradesError(res.error.message);
+      return;
+    }
+
+    cancelEditSeniority();
+    await refreshSeniorityGrades();
+  }
+
+  async function deleteSeniority(id: string) {
+    setSeniorityGradesError(null);
+    const res = await seniorityGradesTable.delete().eq("id", id);
+    if (res.error) {
+      setSeniorityGradesError(res.error.message);
+      return;
+    }
+    if (editingSeniorityId === id) cancelEditSeniority();
+    await refreshSeniorityGrades();
   }
 
   return (
@@ -423,6 +767,296 @@ export default function SettingsPage() {
         )}
       </div>
 
+            {/* --- Positions / grades editors --- */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* Positions (top-left) */}
+        <div className="rounded-2xl border border-[var(--ikkimo-border)] bg-white p-6">
+          <div className="text-sm font-semibold">Positions</div>
+          <div className="mt-1 text-xs text-[var(--ikkimo-text-muted,#666)]">
+            Fixed monthly allowance per position.
+          </div>
+
+          {positionsLoading ? (
+            <div className="mt-4 text-sm">Loading…</div>
+          ) : positionsError ? (
+            <div className="mt-4 text-sm">
+              Error: <span className="font-medium">{positionsError}</span>
+            </div>
+          ) : (
+            <>
+              {/* Create new */}
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <label className="sm:col-span-2">
+                  <div className="text-xs font-semibold">Position name</div>
+                  <input
+                    className="mt-1 w-full rounded-xl border border-[var(--ikkimo-border)] px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
+                    value={newPositionName}
+                    onChange={(e) => setNewPositionName(e.target.value)}
+                    placeholder="e.g. Supervisor"
+                  />
+                </label>
+                <label>
+                  <div className="text-xs font-semibold">Allowance (IDR)</div>
+                  <input
+                    className="mt-1 w-full rounded-xl border border-[var(--ikkimo-border)] px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
+                    type="number"
+                    value={String(newPositionAllowance)}
+                    onChange={(e) => setNewPositionAllowance(toNumber(e.target.value, 0))}
+                  />
+                </label>
+              </div>
+
+              <button
+                onClick={addPosition}
+                className="mt-3 rounded-xl bg-[var(--ikkimo-brand)] px-4 py-2 text-sm font-semibold text-white"
+              >
+                Add position
+              </button>
+
+              {/* List */}
+              <div className="mt-5 space-y-2 max-h-[25vh] overflow-y-auto">
+                {positions.length === 0 ? (
+                  <div className="text-sm">No positions yet.</div>
+                ) : (
+                  positions.map((p) => (
+                    <div
+                      key={p.id}
+                      className="flex items-center justify-between rounded-xl border border-[var(--ikkimo-border)] p-3 hover:bg-[var(--ikkimo-brand-hover)]"
+                    >
+                      {editingPositionId === p.id ? (
+                        <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end">
+                          <label className="flex-1">
+                            <div className="text-xs font-semibold">Name</div>
+                            <input
+                              className="mt-1 w-full rounded-xl border border-[var(--ikkimo-border)] px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
+                              value={positionEditName}
+                              onChange={(e) => setPositionEditName(e.target.value)}
+                            />
+                          </label>
+                          <label className="sm:w-44">
+                            <div className="text-xs font-semibold">Allowance</div>
+                            <input
+                              className="mt-1 w-full rounded-xl border border-[var(--ikkimo-border)] px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
+                              type="number"
+                              value={String(positionEditAllowance)}
+                              onChange={(e) => setPositionEditAllowance(toNumber(e.target.value, 0))}
+                            />
+                          </label>
+                          <div className="flex gap-2 sm:pb-[2px]">
+                            <button
+                              onClick={saveEditPosition}
+                              className="rounded-xl bg-[var(--ikkimo-brand)] px-3 py-2 text-sm font-semibold text-white"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={cancelEditPosition}
+                              className="rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-2 text-sm hover:border-[var(--ikkimo-brand)]"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-medium">{p.name}</div>
+                            <div className="mt-1 text-xs text-[var(--ikkimo-text-muted,#666)]">
+                              Allowance: {formatIDR(p.allowance_idr)}
+                            </div>
+                            <div className="text-xs text-[var(--ikkimo-text-muted,#666)]">
+                              Skill grades: {skillCountByPositionId.get(p.id) ?? 0}
+                            </div>
+                          </div>
+
+                          <div className="ml-3 flex shrink-0 items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openSkillModal(p.id)}
+                              className="rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-1.5 text-sm hover:border-[var(--ikkimo-brand)]"
+                              title="View / edit skill grades"
+                            >
+                              Skills
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => startEditPosition(p)}
+                              className="rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-1.5 text-sm hover:border-[var(--ikkimo-brand)]"
+                              title="Edit position name / allowance"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deletePosition(p.id)}
+                              className="rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-1.5 text-sm hover:border-[var(--ikkimo-brand)]"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Seniority (top-right) */}
+        <div className="rounded-2xl border border-[var(--ikkimo-border)] bg-white p-6">
+          <div className="text-sm font-semibold">Seniority grades</div>
+          <div className="mt-1 text-xs text-[var(--ikkimo-text-muted,#666)]">
+            Monthly increase for each grade.
+          </div>
+
+          {seniorityGradesLoading ? (
+            <div className="mt-4 text-sm">Loading…</div>
+          ) : seniorityGradesError ? (
+            <div className="mt-4 text-sm">
+              Error: <span className="font-medium">{seniorityGradesError}</span>
+            </div>
+          ) : (
+            <>
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <label className="sm:col-span-2">
+                  <div className="text-xs font-semibold">Grade</div>
+                  <input
+                    className="mt-1 w-full rounded-xl border border-[var(--ikkimo-border)] px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
+                    type="number"
+                    value={String(newSeniorityGrade)}
+                    onChange={(e) => setNewSeniorityGrade(toNumber(e.target.value, 0))}
+                    min={0}
+                    placeholder="e.g. 0"
+                  />
+                </label>
+                <label>
+                  <div className="text-xs font-semibold">Increase (IDR)</div>
+                  <input
+                    className="mt-1 w-full rounded-xl border border-[var(--ikkimo-border)] px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
+                    type="number"
+                    value={String(newSeniorityIncrease)}
+                    onChange={(e) => setNewSeniorityIncrease(toNumber(e.target.value, 0))}
+                  />
+                </label>
+              </div>
+
+              <button
+                onClick={addSeniorityGrade}
+                className="mt-3 rounded-xl bg-[var(--ikkimo-brand)] px-4 py-2 text-sm font-semibold text-white"
+              >
+                Add grade
+              </button>
+
+              <div className="mt-5 space-y-2 max-h-[25vh] overflow-y-auto">
+                {seniorityGrades.length === 0 ? (
+                  <div className="text-sm">No grades yet.</div>
+                ) : (
+                  seniorityGrades.map((s) => (
+                    <div
+                      key={s.id}
+                      className="flex items-center justify-between rounded-xl border border-[var(--ikkimo-border)] p-3"
+                    >
+                      {editingSeniorityId === s.id ? (
+                        <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end">
+                          <label className="flex-1">
+                            <div className="text-xs font-semibold">Grade</div>
+                            <input
+                              className="mt-1 w-full rounded-xl border border-[var(--ikkimo-border)] px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
+                              type="number"
+                              value={String(seniorityEditGrade)}
+                              onChange={(e) => setSeniorityEditGrade(toNumber(e.target.value, 0))}
+                              min={0}
+                            />
+                          </label>
+                          <label className="sm:w-44">
+                            <div className="text-xs font-semibold">Increase</div>
+                            <input
+                              className="mt-1 w-full rounded-xl border border-[var(--ikkimo-border)] px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
+                              type="number"
+                              value={String(seniorityEditIncrease)}
+                              onChange={(e) => setSeniorityEditIncrease(toNumber(e.target.value, 0))}
+                            />
+                          </label>
+                          <div className="flex gap-2 sm:pb-[2px]">
+                            <button
+                              onClick={saveEditSeniority}
+                              className="rounded-xl bg-[var(--ikkimo-brand)] px-3 py-2 text-sm font-semibold text-white"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={cancelEditSeniority}
+                              className="rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-2 text-sm hover:border-[var(--ikkimo-brand)]"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div>
+                            <div className="text-sm font-medium">{s.grade}</div>
+                            <div className="text-xs text-[var(--ikkimo-text-muted,#666)]">
+                              Increase: {formatIDR(s.increase_monthly_idr)}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => startEditSeniority(s)}
+                              className="rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-1.5 text-sm hover:border-[var(--ikkimo-brand)]"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => deleteSeniority(s.id)}
+                              className="rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-1.5 text-sm hover:border-[var(--ikkimo-brand)]"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+      {skillModalOpen && skillModalPositionId ? (
+        <SkillGradesModal
+          position={positionsById.get(skillModalPositionId) ?? null}
+          positions={positions}
+          grades={skillGrades.filter((g) => g.position_id === skillModalPositionId)}
+          allGrades={skillGrades}
+          positionsById={positionsById}
+          editingSkillId={editingSkillId}
+          skillEditPositionId={skillEditPositionId}
+          skillEditLevel={skillEditLevel}
+          skillEditIncrease={skillEditIncrease}
+          setSkillEditPositionId={setSkillEditPositionId}
+          setSkillEditLevel={setSkillEditLevel}
+          setSkillEditIncrease={setSkillEditIncrease}
+          startEditSkill={startEditSkill}
+          cancelEditSkill={cancelEditSkill}
+          saveEditSkill={saveEditSkill}
+          deleteSkill={deleteSkill}
+          newSkillLevel={newSkillLevel}
+          newSkillIncrease={newSkillIncrease}
+          setNewSkillLevel={setNewSkillLevel}
+          setNewSkillIncrease={setNewSkillIncrease}
+          addSkillGrade={() => addSkillGrade(skillModalPositionId)}
+          loading={skillGradesLoading}
+          error={skillGradesError}
+          onClose={closeSkillModal}
+          formatIDR={formatIDR}
+        />
+      ) : null}
+      </div>
+
       {confirmOpen ? (
         <ConfirmSaveModal
           password={confirmPassword}
@@ -568,6 +1202,229 @@ function ConfirmSaveModal(props: {
           >
             Confirm save
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function SkillGradesModal(props: {
+  position: PositionRow | null;
+  positions: PositionRow[];
+  grades: SkillGradeRow[];
+  allGrades: SkillGradeRow[];
+  positionsById: Map<string, PositionRow>;
+  editingSkillId: string | null;
+  skillEditPositionId: string;
+  skillEditLevel: number;
+  skillEditIncrease: number;
+  setSkillEditPositionId: (v: string) => void;
+  setSkillEditLevel: (v: number) => void;
+  setSkillEditIncrease: (v: number) => void;
+  startEditSkill: (s: SkillGradeRow) => void;
+  cancelEditSkill: () => void;
+  saveEditSkill: () => Promise<void>;
+  deleteSkill: (id: string) => Promise<void>;
+  newSkillLevel: number;
+  newSkillIncrease: number;
+  setNewSkillLevel: (v: number) => void;
+  setNewSkillIncrease: (v: number) => void;
+  addSkillGrade: () => Promise<void>;
+  loading: boolean;
+  error: string | null;
+  onClose: () => void;
+  formatIDR: (n: number | null | undefined) => string;
+}) {
+  const {
+    position,
+    positions,
+    grades,
+    positionsById,
+    editingSkillId,
+    skillEditPositionId,
+    skillEditLevel,
+    skillEditIncrease,
+    setSkillEditPositionId,
+    setSkillEditLevel,
+    setSkillEditIncrease,
+    startEditSkill,
+    cancelEditSkill,
+    saveEditSkill,
+    deleteSkill,
+    newSkillLevel,
+    newSkillIncrease,
+    setNewSkillLevel,
+    setNewSkillIncrease,
+    addSkillGrade,
+    loading,
+    error,
+    onClose,
+    formatIDR,
+  } = props;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4" aria-modal="true" role="dialog">
+      <button className="absolute inset-0 bg-black/30" aria-label="Close" onClick={onClose} />
+
+      <div className="relative w-full max-w-3xl rounded-2xl border border-[var(--ikkimo-border)] bg-white p-6 shadow-lg">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-lg font-semibold">Skill grades</div>
+            <div className="mt-1 text-sm">
+              Position: <span className="font-medium">{position?.name ?? "Unknown position"}</span>
+            </div>
+          </div>
+
+          <button
+            onClick={() => {
+              cancelEditSkill();
+              onClose();
+            }}
+            className="rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-1.5 text-sm hover:border-[var(--ikkimo-brand)]"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="mt-5">
+          <div className="text-sm font-semibold">Add new skill grade</div>
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <label>
+              <div className="text-xs font-semibold">Level</div>
+              <input
+                className="mt-1 w-full rounded-xl border border-[var(--ikkimo-border)] px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
+                type="number"
+                value={String(newSkillLevel)}
+                onChange={(e) => setNewSkillLevel(toNumber(e.target.value, 1))}
+                min={1}
+              />
+            </label>
+            <label>
+              <div className="text-xs font-semibold">Increase (IDR)</div>
+              <input
+                className="mt-1 w-full rounded-xl border border-[var(--ikkimo-border)] px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
+                type="number"
+                value={String(newSkillIncrease)}
+                onChange={(e) => setNewSkillIncrease(toNumber(e.target.value, 0))}
+              />
+            </label>
+            <div className="flex items-end">
+              <button
+                onClick={addSkillGrade}
+                className="w-full rounded-xl bg-[var(--ikkimo-brand)] px-4 py-2 text-sm font-semibold text-white"
+                disabled={!position}
+              >
+                Add
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6">
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-semibold">Existing grades</div>
+            <div className="text-xs text-[var(--ikkimo-text-muted,#666)]">{grades.length} total</div>
+          </div>
+
+          {loading ? (
+            <div className="mt-3 text-sm">Loading…</div>
+          ) : error ? (
+            <div className="mt-3 text-sm">
+              Error: <span className="font-medium">{error}</span>
+            </div>
+          ) : grades.length === 0 ? (
+            <div className="mt-3 text-sm">No skill grades yet.</div>
+          ) : (
+            <div className="mt-3 space-y-2 max-h-[55vh] overflow-y-auto">
+              {grades.map((s) => {
+                const posName = positionsById.get(s.position_id)?.name ?? "Unknown position";
+                return (
+                  <div
+                    key={s.id}
+                    className="flex items-center justify-between rounded-xl border border-[var(--ikkimo-border)] p-3"
+                  >
+                    {editingSkillId === s.id ? (
+                      <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end">
+                        <label className="flex-1">
+                          <div className="text-xs font-semibold">Position</div>
+                          <select
+                            className="mt-1 w-full rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
+                            value={skillEditPositionId}
+                            onChange={(e) => setSkillEditPositionId(e.target.value)}
+                          >
+                            {positions.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="sm:w-28">
+                          <div className="text-xs font-semibold">Level</div>
+                          <input
+                            className="mt-1 w-full rounded-xl border border-[var(--ikkimo-border)] px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
+                            type="number"
+                            value={String(skillEditLevel)}
+                            onChange={(e) => setSkillEditLevel(toNumber(e.target.value, 1))}
+                            min={1}
+                          />
+                        </label>
+                        <label className="sm:w-44">
+                          <div className="text-xs font-semibold">Increase</div>
+                          <input
+                            className="mt-1 w-full rounded-xl border border-[var(--ikkimo-border)] px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
+                            type="number"
+                            value={String(skillEditIncrease)}
+                            onChange={(e) => setSkillEditIncrease(toNumber(e.target.value, 0))}
+                          />
+                        </label>
+                        <div className="flex gap-2 sm:pb-[2px]">
+                          <button
+                            onClick={saveEditSkill}
+                            className="rounded-xl bg-[var(--ikkimo-brand)] px-3 py-2 text-sm font-semibold text-white"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={cancelEditSkill}
+                            className="rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-2 text-sm hover:border-[var(--ikkimo-brand)]"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div>
+                          <div className="text-sm font-medium">
+                            {posName} — L{s.level}
+                          </div>
+                          <div className="text-xs text-[var(--ikkimo-text-muted,#666)]">
+                            Increase: {formatIDR(s.increase_monthly_idr)}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => startEditSkill(s)}
+                            className="rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-1.5 text-sm hover:border-[var(--ikkimo-brand)]"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => deleteSkill(s.id)}
+                            className="rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-1.5 text-sm hover:border-[var(--ikkimo-brand)]"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>
