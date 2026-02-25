@@ -1,24 +1,37 @@
 export type BasicEmployeeRow = {
   uuid: string;
-  internal_no: number;
+  internal_no: number | null;
   employee_code: string;
   preferred_name: string | null;
   employee_name: string;
   department: string | null;
-  position: string | null;
   start_date: string | null;
   active: boolean;
   base_salary: number;
   current_salary?: number | null;
+
+  fingerprint_id?: string | null;
+  probation?: boolean;
+
+  position_id: string;
+  positions?: {
+    id: string;
+    name: string;
+    allowance_idr?: number | null;
+  } | null;
+
   seniority_grades?: {
+    id?: string;
     grade: number;
-    increase_monthly_idr?: number;
-  }[];
+    increase_monthly_idr?: number | null;
+  } | null;
+
   skill_grades?: {
-    position: string | null;
+    id?: string;
+    position_id?: string;
     level: number | null;
-    increase_monthly_idr?: number;
-  }[];
+    increase_monthly_idr?: number | null;
+  } | null;
 };
 
 export type EmployeeSortKey =
