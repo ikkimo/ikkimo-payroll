@@ -26,6 +26,7 @@ type EditableEmployee = BasicEmployeeRow & {
   basic?: number | null;
   position_id?: string | null;
   skill_grade_id?: string | null;
+  gets_bpjs_jp?: boolean;
 };
 
 const formatDateEn = (iso: string | null | undefined): string => {
@@ -205,8 +206,6 @@ export default function EmployeePage() {
   async function commitSave() {
     if (!employee) return;
 
-    console.log("PARAM UUID:", uuid);
-    console.log("EMPLOYEE UUID:", employee.uuid);
 
     setSaving(true);
     setError(null);
@@ -224,6 +223,7 @@ export default function EmployeePage() {
       basic: employee.basic ?? 0,
       position_id: employee.position_id ?? (employee.positions?.id ?? null),
       skill_grade_id: employee.skill_grade_id ?? (employee.skill_grades?.id ?? null),
+      gets_bpjs_jp: employee.gets_bpjs_jp,
       // Do NOT update probation here!
     };
 
@@ -232,7 +232,7 @@ export default function EmployeePage() {
       .update(payload)
       .eq("uuid", employee. uuid)
       .select(
-        "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name, allowance_idr)"
+        "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name, allowance_idr), gets_bpjs_jp"
       )
       .maybeSingle();
 
@@ -272,8 +272,6 @@ export default function EmployeePage() {
       // Keep return payload minimal to avoid RLS/join issues causing null data.
       .select("uuid, probation")
       .maybeSingle();
-
-    console.log("UPDATE RESULT: ", res);
 
     if (res.error) {
       // Roll back optimistic update on error.
@@ -656,6 +654,26 @@ async function createPositionAndSelect() {
                       updateEmployee("basic", Number.isFinite(n) ? n : 0);
                     }}
                   />
+                )}
+              </div>
+
+              {/* Receives Pension */}
+              <div>
+                <div className="text-xs font-semibold">Receives Pension (BPJS - JP )</div>
+                {!editing ? (
+                  <div className="mt-1 text-sm text-gray-500">
+                    {employee.gets_bpjs_jp ? "Yes" : "No"}
+                  </div>
+                ) : (
+                  <label className="mt-1 inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={employee.gets_bpjs_jp ?? false}
+                      onChange={(e) => updateEmployee("gets_bpjs_jp", e.target.checked)}
+                      className="rounded border-[var(--ikkimo-border)] bg-white text-[var(--ikkimo-brand)]"
+                    />
+                    <span className="text-sm">{employee.gets_bpjs_jp ? "Yes" : "No"}</span>
+                  </label>
                 )}
               </div>
             </div>

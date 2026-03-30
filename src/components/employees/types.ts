@@ -12,6 +12,7 @@ export type BasicEmployeeRow = {
 
   fingerprint_id?: string | null;
   probation?: boolean;
+  gets_bpjs_jp?: boolean;
 
   position_id: string;
   positions?: {
