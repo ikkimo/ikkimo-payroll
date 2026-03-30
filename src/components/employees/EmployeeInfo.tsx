@@ -31,14 +31,18 @@ type DetailsProps = {
 export function EmployeeDetails({ employee, formatDate }: DetailsProps) {
   return (
     <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-      <InfoCard label="Department" value={employee.department ?? "-"} />
       <InfoCard
-        label="Position"
-        value={employee.positions?.name ?? "-"}
+        label="Start date"
+        value={formatDate(employee.start_date)}
+        // className="sm:col-span-2"
       />
       <InfoCard
         label="Seniority grade"
         value={employee.seniority_grades?.grade ?? "-"}
+      />
+      <InfoCard
+        label="Position"
+        value={employee.positions?.name ?? "-"}
       />
       <InfoCard
         label="Skill grade"
@@ -49,15 +53,11 @@ export function EmployeeDetails({ employee, formatDate }: DetailsProps) {
             : "-"
         }
       />
+      <InfoCard label="Department" value={employee.department ?? "-"} />
       <InfoCard
-        label="Base salary (IDR)"
+        label="Basic (IDR)"
         value={formatIDR(employee.basic)}
-        className="sm:col-span-2"
-      />
-      <InfoCard
-        label="Start date"
-        value={formatDate(employee.start_date)}
-        className="sm:col-span-2"
+        // className="sm:col-span-2"
       />
     </div>
   );
@@ -84,7 +84,7 @@ export default function EmployeeModal({
             <div className="text-lg font-semibold">{employee.employee_name}</div>
             <div className="mt-0.5 text-sm">{employee.preferred_name ?? "-"}</div>
             <div className="mt-1 text-sm">
-              No ID Karyawan: <span className="font-medium">{employee.employee_code}</span>
+              Nº ID Karyawan: <span className="font-medium">{employee.employee_code}</span>
             </div>
           </div>
 
