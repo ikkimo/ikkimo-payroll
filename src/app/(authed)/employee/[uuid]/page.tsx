@@ -8,6 +8,7 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { formatIDR } from "@/lib/formatters";
 import type { BasicEmployeeRow } from "@/components/employees/types";
+import type { PayrollSettingsRow } from "@/components/settings/types";
 
 type PositionRow = {
   id: string;
@@ -37,6 +38,32 @@ const formatDateEn = (iso: string | null | undefined): string => {
     year: "numeric",
   }).format(new Date(iso));
 };
+
+function parseYMDLocal(s: string) {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+const formatThrPayoutDate = (
+  preference: "muslim" | "christian" | "balinese" | null | undefined,
+  settings: PayrollSettingsRow | null
+): string => {
+  if (!preference || !settings) return "-";
+
+  const sourceDate =
+    preference === "muslim"
+      ? settings.thr_muslim_date
+      : preference === "christian"
+      ? settings.thr_christian_date
+      : settings.thr_balinese_date;
+
+  if (!sourceDate) return "-";
+
+  const d = parseYMDLocal(sourceDate);
+  d.setDate(d.getDate() - 7);
+  return formatDateEn(d.toISOString().slice(0, 10));
+};
+
 
 
 export default function EmployeePage() {
@@ -69,6 +96,9 @@ export default function EmployeePage() {
   const [positionCreateError, setPositionCreateError] = useState<string | null>(null);
   const [positionSelectValue, setPositionSelectValue] = useState<string>("");
 
+  const [payrollSettings, setPayrollSettings] = useState<PayrollSettingsRow | null>(null);
+
+
   useEffect(() => {
     let alive = true;
 
@@ -85,11 +115,11 @@ export default function EmployeePage() {
 
       if (!alive) return;
 
-      const [empRes, posRes, skillRes] = await Promise.all([
+      const [empRes, posRes, skillRes, settingsRes] = await Promise.all([
         supabase
           .from("employees")
           .select(
-            "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, gets_bpjs_jp, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name, allowance_idr)"
+            "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, gets_bpjs_jp, thr_preference, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name, allowance_idr)"
           )
           .eq("uuid", uuid)
           .maybeSingle(),
@@ -99,6 +129,7 @@ export default function EmployeePage() {
           .select("id, position_id, level, increase_monthly_idr")
           .order("position_id", { ascending: true })
           .order("level", { ascending: true }),
+        supabase.from("payroll_settings").select("thr_balinese_date, thr_christian_date, thr_muslim_date").limit(1).maybeSingle(),
       ]);
 
       if (!alive) return;
@@ -119,6 +150,9 @@ export default function EmployeePage() {
 
       if (skillRes.error) setSkillGrades([]);
       else setSkillGrades((skillRes.data as unknown as SkillGradeRow[]) ?? []);
+
+      if (settingsRes.error) setPayrollSettings(null);
+      else setPayrollSettings(settingsRes.data as unknown as PayrollSettingsRow | null);
 
       // Initialize position select value when employee loads
       const emp =
@@ -400,6 +434,9 @@ async function createPositionAndSelect() {
                 </div>
                 <div className="mt-1 text-sm">
                   Fingerprint ID: <span className="font-medium">{employee.fingerprint_id ?? "-"}</span>
+                </div>
+                <div className="text-xs text-gray-500">
+                  THR: {capitalizeFirst(employee.thr_preference) ?? "missing"} | Date to pay: {formatThrPayoutDate(employee.thr_preference, payrollSettings) ?? "missing"}
                 </div>
 
               </div>
@@ -756,4 +793,8 @@ function ConfirmSaveModal(props: {
       </div>
     </div>
   );
+}
+function capitalizeFirst(value: string | null | undefined) {
+  if (!value) return "-";
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }

@@ -1,4 +1,4 @@
-export type ThrReligion = 'muslim' | 'christian' | 'balinese';
+export type ThrReligion = "balinese" | "christian" | "muslim";
 
 export type BasicEmployeeRow = {
   uuid: string;
@@ -15,7 +15,7 @@ export type BasicEmployeeRow = {
   fingerprint_id?: string | null;
   probation?: boolean;
   gets_bpjs_jp?: boolean;
-  thr_religion?: ThrReligion | null;   // ← add this
+  thr_preference?: ThrReligion | null;
 
   position_id: string;
   positions?: {
@@ -37,6 +37,7 @@ export type BasicEmployeeRow = {
     increase_monthly_idr?: number | null;
   } | null;
 };
+
 
 export type EmployeeSortKey =
   | "internal_no"
