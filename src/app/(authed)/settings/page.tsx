@@ -22,9 +22,14 @@ const SETTINGS_SELECT = [
   "overtime2_multiplier",
   "overtime3_multiplier",
   "thr",
+  "thr_muslim_date",
+  "thr_christian_date",
+  "thr_balinese_date",
+  "payroll_end_date",
   "created_at",
   "updated_at",
 ].join(", ");
+
 
 const POSITIONS_SELECT = ["id", "name", "allowance_idr", "created_at", "updated_at"].join(", ");
 const SKILL_GRADES_SELECT = ["id", "position_id", "level", "increase_monthly_idr", "notes", "created_at"].join(", ");
@@ -39,6 +44,33 @@ function toNumber(value: string, fallback: number) {
 function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n));
 }
+
+function parseYMDLocal(s: string) {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+// function formatReadableDate(s: string) {
+//   return new Intl.DateTimeFormat("en-GB", {
+//     day: "2-digit",
+//     month: "short",
+//     year: "numeric",
+//   }).format(parseYMDLocal(s));
+// }
+
+function isPastYMD(s: string) {
+  const input = parseYMDLocal(s);
+  const today = new Date();
+  const now = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  return input < now;
+}
+
+// function formatThrSettingDate(s: string | null | undefined) {
+//   if (!s) return "next date required";
+//   if (isPastYMD(s)) return "next date required";
+//   return formatReadableDate(s);
+// }
+
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -656,7 +688,7 @@ export default function SettingsPage() {
         ) : (
           <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
             {/* Working time */}
-            <Section title="Working time">
+            <Section title="Company constants">
               <NumberField
                 label="Standard working days"
                 value={row.standard_working_days}
@@ -675,6 +707,35 @@ export default function SettingsPage() {
                 onChange={(v) => updateField("hours_per_day", v)}
                 disabled={!editing}
               />
+              <NumberField
+                label="Payroll end date"
+                value={row.payroll_end_date}
+                step={1}
+                min={1}
+                max={31}
+                onChange={(v) => updateField("payroll_end_date", v)}
+                disabled={!editing}
+              />
+              <div className="space-y-3">
+                <DateField
+                  label=" THR Muslim / Eid"
+                  value={row.thr_muslim_date}
+                  onChange={(v) => updateField("thr_muslim_date", v)}
+                  disabled={!editing}
+                />
+                <DateField
+                  label="THR Christian / Christmas"
+                  value={row.thr_christian_date}
+                  onChange={(v) => updateField("thr_christian_date", v)}
+                  disabled={!editing}
+                />
+                <DateField
+                  label="THR Balinese / Nyepi"
+                  value={row.thr_balinese_date}
+                  onChange={(v) => updateField("thr_balinese_date", v)}
+                  disabled={!editing}
+                />
+              </div>
             </Section>
 
             {/* Overtime + THR */}
@@ -1125,6 +1186,38 @@ function NumberField(props: {
     </label>
   );
 }
+
+function DateField(props: {
+  label: string;
+  value: string | null;
+  onChange: (v: string | null) => void;
+  disabled: boolean;
+}) {
+  const { label, value, onChange, disabled } = props;
+  const isExpired = value && isPastYMD(value);
+
+  return (
+    <label className="block">
+      <div className="text-xs font-semibold">{label}</div>
+      <input
+        className={`mt-1 w-full rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)] disabled:cursor-not-allowed disabled:opacity-60 ${
+          isExpired ? "border-red-400 bg-red-50" : "border-[var(--ikkimo-border)]"
+        }`}
+        type="date"
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value || null)}
+        disabled={disabled}
+      />
+      {isExpired && (
+        <div className="mt-1 text-xs font-medium text-red-600">
+          Next date required
+        </div>
+      )}
+    </label>
+  );
+}
+
+
 
 function ConfirmSaveModal(props: {
   password: string;

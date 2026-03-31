@@ -1,3 +1,5 @@
+export type ThrReligion = "balinese" | "christian" | "muslim";
+
 export type BasicEmployeeRow = {
   uuid: string;
   internal_no: number | null;
@@ -7,11 +9,14 @@ export type BasicEmployeeRow = {
   department: string | null;
   start_date: string | null;
   active: boolean;
-  base_salary: number;
+  basic: number;
   current_salary?: number | null;
 
   fingerprint_id?: string | null;
   probation?: boolean;
+  gets_bpjs_jp?: boolean;
+  thr_preference?: ThrReligion | null;
+  cash_loan_balance_idr: number;
 
   position_id: string;
   positions?: {
@@ -34,6 +39,7 @@ export type BasicEmployeeRow = {
   } | null;
 };
 
+
 export type EmployeeSortKey =
   | "internal_no"
   | "employee_code"
@@ -43,8 +49,8 @@ export type EmployeeSortKey =
   | "position";
 
 export const SORT_OPTIONS: Array<{ value: EmployeeSortKey; label: string }> = [
-  { value: "internal_no", label: "No." },
-  { value: "employee_code", label: "No. ID Karyawan" },
+  { value: "internal_no", label: "Nº" },
+  { value: "employee_code", label: "Nº ID Karyawan" },
   { value: "employee_name", label: "Name Lengkap" },
   { value: "start_date", label: "Start date" },
   { value: "department", label: "Department" },

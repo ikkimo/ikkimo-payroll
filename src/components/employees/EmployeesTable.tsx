@@ -20,8 +20,8 @@ export default function EmployeesTable({
       <table className="w-full text-left text-sm">
         <thead className="text-xs">
           <tr>
-            <th className="px-5 py-3">No.</th>
-            <th className="px-5 py-3">No. ID Karyawan</th>
+            {/* <th className="px-5 py-3">Nº</th> */}
+            <th className="px-5 py-3">Nº ID Karyawan</th>
             <th className="px-5 py-3">Nama Panggilan</th>
             <th className="px-5 py-3">Nama Lengkap</th>
             <th className="px-5 py-3">Department</th>
@@ -52,7 +52,7 @@ export default function EmployeesTable({
                   window.location.href = `/employee/${e.uuid}`;
                 }}
               >
-                <td className="px-5 py-3">{e.internal_no ?? "-"}</td>
+                {/* <td className="px-5 py-3">{e.internal_no ?? "-"}</td> */}
                 <td className="px-5 py-3">{e.employee_code}</td>
                 <td className="px-5 py-3">{e.preferred_name ?? "-"}</td>
                 <td className="px-5 py-3">{e.employee_name}</td>
