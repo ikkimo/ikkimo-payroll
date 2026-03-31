@@ -119,7 +119,7 @@ export default function EmployeePage() {
         supabase
           .from("employees")
           .select(
-            "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, gets_bpjs_jp, thr_preference, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name, allowance_idr)"
+            "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, gets_bpjs_jp, thr_preference, cash_loan_balance_idr, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name, allowance_idr)"
           )
           .eq("uuid", uuid)
           .maybeSingle(),
@@ -713,6 +713,18 @@ async function createPositionAndSelect() {
                   </label>
                 )}
               </div>
+
+              {/* Cash Loan Balance */}
+              {employee.cash_loan_balance_idr > 0 && (
+                <div>
+                  <div className="text-xs font-semibold">Cash loan balance (IDR)</div>
+                  <div className="mt-1 text-sm text-red-600 font-medium">
+                    {formatIDR(employee.cash_loan_balance_idr)}
+                  </div>
+                </div>
+              )}
+
+
             </div>
           </>
         )}

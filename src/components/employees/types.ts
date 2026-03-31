@@ -16,6 +16,7 @@ export type BasicEmployeeRow = {
   probation?: boolean;
   gets_bpjs_jp?: boolean;
   thr_preference?: ThrReligion | null;
+  cash_loan_balance_idr: number;
 
   position_id: string;
   positions?: {
