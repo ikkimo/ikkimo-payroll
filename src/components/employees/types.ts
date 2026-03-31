@@ -48,8 +48,8 @@ export type EmployeeSortKey =
   | "position";
 
 export const SORT_OPTIONS: Array<{ value: EmployeeSortKey; label: string }> = [
-  { value: "internal_no", label: "No." },
-  { value: "employee_code", label: "No. ID Karyawan" },
+  { value: "internal_no", label: "Nº" },
+  { value: "employee_code", label: "Nº ID Karyawan" },
   { value: "employee_name", label: "Name Lengkap" },
   { value: "start_date", label: "Start date" },
   { value: "department", label: "Department" },

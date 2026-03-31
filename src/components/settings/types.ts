@@ -21,6 +21,8 @@ export type PayrollSettingsRow = {
   thr_christian_date: string | null;
   thr_balinese_date: string | null;
 
+  payroll_end_date: number;
+
   created_at?: string;
   updated_at?: string;
 };

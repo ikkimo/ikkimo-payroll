@@ -25,6 +25,7 @@ const SETTINGS_SELECT = [
   "thr_muslim_date",
   "thr_christian_date",
   "thr_balinese_date",
+  "payroll_end_date",
   "created_at",
   "updated_at",
 ].join(", ");
@@ -49,13 +50,13 @@ function parseYMDLocal(s: string) {
   return new Date(y, m - 1, d);
 }
 
-function formatReadableDate(s: string) {
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(parseYMDLocal(s));
-}
+// function formatReadableDate(s: string) {
+//   return new Intl.DateTimeFormat("en-GB", {
+//     day: "2-digit",
+//     month: "short",
+//     year: "numeric",
+//   }).format(parseYMDLocal(s));
+// }
 
 function isPastYMD(s: string) {
   const input = parseYMDLocal(s);
@@ -64,11 +65,11 @@ function isPastYMD(s: string) {
   return input < now;
 }
 
-function formatThrSettingDate(s: string | null | undefined) {
-  if (!s) return "next date required";
-  if (isPastYMD(s)) return "next date required";
-  return formatReadableDate(s);
-}
+// function formatThrSettingDate(s: string | null | undefined) {
+//   if (!s) return "next date required";
+//   if (isPastYMD(s)) return "next date required";
+//   return formatReadableDate(s);
+// }
 
 
 export default function SettingsPage() {
@@ -706,26 +707,35 @@ export default function SettingsPage() {
                 onChange={(v) => updateField("hours_per_day", v)}
                 disabled={!editing}
               />
-            <div className="space-y-3">
-              <DateField
-                label="Muslim / Eid"
-                value={row.thr_muslim_date}
-                onChange={(v) => updateField("thr_muslim_date", v)}
+              <NumberField
+                label="Payroll end date"
+                value={row.payroll_end_date}
+                step={1}
+                min={1}
+                max={31}
+                onChange={(v) => updateField("payroll_end_date", v)}
                 disabled={!editing}
               />
-              <DateField
-                label="Christian / Christmas"
-                value={row.thr_christian_date}
-                onChange={(v) => updateField("thr_christian_date", v)}
-                disabled={!editing}
-              />
-              <DateField
-                label="Balinese / Nyepi"
-                value={row.thr_balinese_date}
-                onChange={(v) => updateField("thr_balinese_date", v)}
-                disabled={!editing}
-              />
-            </div>
+              <div className="space-y-3">
+                <DateField
+                  label=" THR Muslim / Eid"
+                  value={row.thr_muslim_date}
+                  onChange={(v) => updateField("thr_muslim_date", v)}
+                  disabled={!editing}
+                />
+                <DateField
+                  label="THR Christian / Christmas"
+                  value={row.thr_christian_date}
+                  onChange={(v) => updateField("thr_christian_date", v)}
+                  disabled={!editing}
+                />
+                <DateField
+                  label="THR Balinese / Nyepi"
+                  value={row.thr_balinese_date}
+                  onChange={(v) => updateField("thr_balinese_date", v)}
+                  disabled={!editing}
+                />
+              </div>
             </Section>
 
             {/* Overtime + THR */}
