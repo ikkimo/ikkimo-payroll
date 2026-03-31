@@ -29,7 +29,7 @@ create table if not exists public.employees (
   position text,
   start_date date,
 
-  base_salary numeric(14,2) not null default 0,
+  basic numeric(14,2) not null default 0,
 
   -- keep for migration period; can be dropped later
   current_salary numeric(14,2),

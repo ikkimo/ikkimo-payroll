@@ -1,4 +1,4 @@
-employee_code,employee_name,preferred_name,department,position,start_date,base_salary,current_salary,internal_no,active
+employee_code,employee_name,preferred_name,department,position,start_date,basic,current_salary,internal_no,active
 00700330,Caroline Therese Y Lissoir,Caroline,EXPATS,Komisaris,2023-02-01,10000000,10000000,1,true
 00981009,Max Constant A Defourny,Max,EXPATS,Direktur,2023-02-01,8000000,8000000,2,true
 25710909,Saadia Chouak,Saadia,EXPATS,Opr. Manager,2025-01-16,50238208 ,50238208 ,3,true
