@@ -1,3 +1,5 @@
+export type ThrReligion = 'muslim' | 'christian' | 'balinese';
+
 export type BasicEmployeeRow = {
   uuid: string;
   internal_no: number | null;
@@ -13,6 +15,7 @@ export type BasicEmployeeRow = {
   fingerprint_id?: string | null;
   probation?: boolean;
   gets_bpjs_jp?: boolean;
+  thr_religion?: ThrReligion | null;   // ← add this
 
   position_id: string;
   positions?: {

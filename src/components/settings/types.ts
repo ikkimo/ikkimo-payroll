@@ -17,6 +17,11 @@ export type PayrollSettingsRow = {
 
   thr: number;
 
+  // THR payment dates (set manually once per year)
+  thr_muslim_date: string | null;
+  thr_christian_date: string | null;
+  thr_balinese_date: string | null;
+
   created_at?: string;
   updated_at?: string;
 };
