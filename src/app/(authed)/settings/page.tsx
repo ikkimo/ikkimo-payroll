@@ -381,7 +381,10 @@ export default function SettingsPage() {
     setPositionModalName("");
     setPositionModalAllowance(String(0));
     setPositionsError(null);
+    cancelEditSkill();
+    setSkillGradesError(null);
   }
+
   async function savePositionModal() {
     if (!positionModalTarget) return;
     const name = positionModalName.trim();
@@ -391,6 +394,12 @@ export default function SettingsPage() {
       return;
     }
     setPositionsError(null);
+
+    if (editingSkillId) {
+      const skillOk = await saveEditSkill();
+      if (!skillOk) return;
+    }
+
     const res = await positionsTable
       .update({ name, allowance_idr: allowance })
       .eq("id", positionModalTarget.id)
@@ -542,7 +551,8 @@ export default function SettingsPage() {
       return;
     }
 
-    const level = clamp(Math.trunc(parsedLevel), 1, 99);
+    const level = clamp(parsedLevel, 1, 99);
+
     const increase = Number(newSkillIncrease || 0);
 
     setSkillGradesError(null);
@@ -568,30 +578,56 @@ export default function SettingsPage() {
 
   function startEditSkill(s: SkillGradeRow) {
     setEditingSkillId(s.id);
-    setSkillEditLevel(s.level);
-    setSkillEditIncrease(s.increase_monthly_idr);
+    setSkillEditLevel(Number(s.level ?? 1));
+    setSkillEditIncrease(Number(s.increase_monthly_idr ?? 0));
+    setSkillGradesError(null);
   }
+
   function cancelEditSkill() {
     setEditingSkillId(null);
     setSkillEditLevel(1);
     setSkillEditIncrease(0);
   }
   async function saveEditSkill() {
-    if (!editingSkillId || !skillModalPositionId) return;
-    const level = clamp(Math.trunc(skillEditLevel), 1, 99);
+    if (!editingSkillId || !positionModalTarget) return false;
+
+    const level = clamp(Number(skillEditLevel), 1, 99);
+    const increase = Number(skillEditIncrease || 0);
+
     setSkillGradesError(null);
+
+    const duplicate = skillGrades.find(
+      (g) =>
+        g.position_id === positionModalTarget.id &&
+        g.id !== editingSkillId &&
+        Number(g.level) === level
+    );
+
+    if (duplicate) {
+      setSkillGradesError(`Level ${level} already exists for this position.`);
+      return false;
+    }
+
     const res = await skillGradesTable
-      .update({ level, increase_monthly_idr: skillEditIncrease })
+      .update({
+        level,
+        increase_monthly_idr: increase,
+      })
       .eq("id", editingSkillId)
       .select(SKILL_GRADES_SELECT)
       .single();
+
     if (res.error) {
       setSkillGradesError(res.error.message);
-      return;
+      return false;
     }
+
     cancelEditSkill();
     await refreshSkillGrades();
+    return true;
   }
+
+
   async function deleteSkill(id: string) {
     setSkillGradesError(null);
     const res = await skillGradesTable.delete().eq("id", id);
@@ -1094,6 +1130,7 @@ export default function SettingsPage() {
                               setSkillEditLevel(toNumber(e.target.value, 1))
                             }
                             min={1}
+                            step={0.5}
                             className="h-8 w-16 rounded-lg border border-[var(--ikkimo-brand)] px-2 text-sm outline-none tabular-nums"
                           />
                           <input
@@ -1103,6 +1140,7 @@ export default function SettingsPage() {
                               setSkillEditIncrease(toNumber(e.target.value, 0))
                             }
                             min={0}
+                            step={0.5}
                             className="h-8 flex-1 rounded-lg border border-[var(--ikkimo-brand)] px-2 text-sm outline-none tabular-nums"
                             placeholder="IDR / month"
                           />
