@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
 
   const results = [];
 
+  
   for (let month = 1; month <= 12; month++) {
     const { data: period, error: periodError } = await supabaseAdmin
       .from("payroll_periods")

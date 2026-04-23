@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  
   const result = await syncWorkingDays(year, month);
   return NextResponse.json({ year, month, ...result });
 }
