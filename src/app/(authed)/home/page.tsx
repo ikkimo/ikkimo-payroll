@@ -9,6 +9,7 @@ import {
 } from "@/components/employees/types";
 import EmployeesHeaderControls from "@/components/employees/EmployeesHeaderControls";
 import EmployeesTable from "@/components/employees/EmployeesTable";
+import Link from "next/link";
 
 function nowYearMonth() {
   const d = new Date();
@@ -17,13 +18,17 @@ function nowYearMonth() {
 
 function isMissingColumnError(error: unknown, column: string): boolean {
   if (!error || typeof error !== "object") return false;
-  const msg = "message" in error && typeof (error as { message: unknown }).message === "string"
-    ? (error as { message: string }).message
-    : "";
+  const msg =
+    "message" in error &&
+    typeof (error as { message: unknown }).message === "string"
+      ? (error as { message: string }).message
+      : "";
   const lower = msg.toLowerCase();
-  return lower.includes(column.toLowerCase()) && (lower.includes("does not exist") || lower.includes("column"));
+  return (
+    lower.includes(column.toLowerCase()) &&
+    (lower.includes("does not exist") || lower.includes("column"))
+  );
 }
-
 
 type PayrollPeriod = {
   id: string;
@@ -59,7 +64,6 @@ const formatDateEn = (iso: string | null | undefined): string => {
     year: "numeric",
   }).format(new Date(iso));
 };
-
 
 export default function HomePage() {
   const router = useRouter();
@@ -104,30 +108,56 @@ export default function HomePage() {
     list.sort((a, b) => {
       switch (sortBy) {
         case "internal_no": {
-          const ai = a.internal_no && a.internal_no > 0 ? a.internal_no : Number.POSITIVE_INFINITY;
-          const bi = b.internal_no && b.internal_no > 0 ? b.internal_no : Number.POSITIVE_INFINITY;
+          const ai =
+            a.internal_no && a.internal_no > 0
+              ? a.internal_no
+              : Number.POSITIVE_INFINITY;
+          const bi =
+            b.internal_no && b.internal_no > 0
+              ? b.internal_no
+              : Number.POSITIVE_INFINITY;
           return ai - bi;
         }
         case "employee_code":
-          return safeStr(a.employee_code).localeCompare(safeStr(b.employee_code), "en", {
-            numeric: true,
-            sensitivity: "base",
-          });
+          return safeStr(a.employee_code).localeCompare(
+            safeStr(b.employee_code),
+            "en",
+            {
+              numeric: true,
+              sensitivity: "base",
+            },
+          );
         case "employee_name":
-          return safeStr(a.employee_name).localeCompare(safeStr(b.employee_name), "en", {
-            sensitivity: "base",
-          });
+          return safeStr(a.employee_name).localeCompare(
+            safeStr(b.employee_name),
+            "en",
+            {
+              sensitivity: "base",
+            },
+          );
         case "department":
-          return safeStr(a.department).localeCompare(safeStr(b.department), "en", {
-            sensitivity: "base",
-          });
+          return safeStr(a.department).localeCompare(
+            safeStr(b.department),
+            "en",
+            {
+              sensitivity: "base",
+            },
+          );
         case "position":
-          return safeStr(a.positions?.name).localeCompare(safeStr(b.positions?.name), "en", {
-            sensitivity: "base",
-          });
+          return safeStr(a.positions?.name).localeCompare(
+            safeStr(b.positions?.name),
+            "en",
+            {
+              sensitivity: "base",
+            },
+          );
         case "start_date": {
-          const ta = a.start_date ? new Date(a.start_date).getTime() : Number.POSITIVE_INFINITY;
-          const tb = b.start_date ? new Date(b.start_date).getTime() : Number.POSITIVE_INFINITY;
+          const ta = a.start_date
+            ? new Date(a.start_date).getTime()
+            : Number.POSITIVE_INFINITY;
+          const tb = b.start_date
+            ? new Date(b.start_date).getTime()
+            : Number.POSITIVE_INFINITY;
           return ta - tb;
         }
         default:
@@ -160,7 +190,7 @@ export default function HomePage() {
       const employeesPromise = supabase
         .from("employees")
         .select(
-          "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, basic, current_salary, fingerprint_id, probation, position_id, positions:positions!employees_position_id_fkey(id, name, allowance_idr), seniority_grades:seniority_grades!employees_seniority_grade_id_fkey(grade, increase_monthly_idr), skill_grades:skill_grades!employees_skill_grade_id_fkey(level, increase_monthly_idr, position_id)"
+          "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, basic, current_salary, fingerprint_id, probation, position_id, positions:positions!employees_position_id_fkey(id, name), seniority_grades:seniority_grades!employees_seniority_grade_id_fkey(grade, increase_monthly_idr), skill_grades:skill_grades!employees_skill_grade_id_fkey(level, increase_monthly_idr, position_id)",
         )
         .eq("active", true)
         .order("internal_no", { ascending: true })
@@ -235,7 +265,8 @@ export default function HomePage() {
             if (latestNoRed.error) {
               periodErr = latestNoRed.error.message;
             } else {
-              periodRow = (latestNoRed.data?.[0] as PayrollPeriod | null) ?? null;
+              periodRow =
+                (latestNoRed.data?.[0] as PayrollPeriod | null) ?? null;
             }
           } else {
             periodErr = latestRes.error.message;
@@ -273,7 +304,8 @@ export default function HomePage() {
               "Loading…"
             ) : periodError ? (
               <div className="text-sm">
-                Could not load payroll period: <span className="font-medium">{periodError}</span>
+                Could not load payroll period:{" "}
+                <span className="font-medium">{periodError}</span>
               </div>
             ) : !period ? (
               "No payroll period found yet. Create one in payroll_periods."
@@ -283,10 +315,14 @@ export default function HomePage() {
                   {`${monthName(period.month)} ${period.year ?? ""}`.trim()}
                 </div>
                 <div className="text-sm">
-                  Working days: <span className="font-medium">{period.working_days ?? "—"}</span>
+                  Working days:{" "}
+                  <span className="font-medium">
+                    {period.working_days ?? "—"}
+                  </span>
                 </div>
                 <div className="text-sm">
-                  Red days: <span className="font-medium">{period.red_days ?? "—"}</span>
+                  Red days:{" "}
+                  <span className="font-medium">{period.red_days ?? "—"}</span>
                 </div>
               </div>
             )}
@@ -299,13 +335,20 @@ export default function HomePage() {
             Create a monthly input run for the selected payroll period.
           </div>
 
-          <button
+          {/* <button
             disabled
             className="mt-4 w-full rounded-xl bg-[var(--ikkimo-brand)] py-2.5 text-sm font-semibold text-white disabled:opacity-100 disabled:cursor-not-allowed"
             title="We’ll enable this once periods + input table are wired."
           >
             Start payroll session
-          </button>
+          </button> */}
+          {/* <Link href="/payroll" className="w-full block text-center rounded-xl bg-[var(--ikkimo-brand)] py-2.5 text-sm font-semibold text-white hover:bg-[var(--ikkimo-brand-hover)]"> */}
+          <Link
+            href="/payroll"
+            className="mt-4 w-full block text-center rounded-xl bg-[var(--ikkimo-brand)] py-2.5 text-sm font-semibold text-white hover:bg-[var(--ikkimo-brand-hover)]"
+          >
+            Start payroll session
+          </Link>
         </section>
       </div>
 

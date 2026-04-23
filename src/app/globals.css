@@ -8,7 +8,8 @@
   --ikkimo-border: rgb(171, 171, 171);
 }
 
-html, body {
+html,
+body {
   margin: 0;
   padding: 0;
 }

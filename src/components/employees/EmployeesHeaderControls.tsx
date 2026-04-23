@@ -23,11 +23,11 @@ export default function EmployeesHeaderControls({
   setSortBy,
 }: Props) {
   const departmentOptions = useMemo(() => {
-    return [...new Set(
-      employees
-        .map((e) => (e.department ?? "").trim())
-        .filter(Boolean)
-    )].sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
+    return [
+      ...new Set(
+        employees.map((e) => (e.department ?? "").trim()).filter(Boolean),
+      ),
+    ].sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
   }, [employees]);
 
   const showReset =

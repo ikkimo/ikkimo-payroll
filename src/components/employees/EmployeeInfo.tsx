@@ -40,10 +40,7 @@ export function EmployeeDetails({ employee, formatDate }: DetailsProps) {
         label="Seniority grade"
         value={employee.seniority_grades?.grade ?? "-"}
       />
-      <InfoCard
-        label="Position"
-        value={employee.positions?.name ?? "-"}
-      />
+      <InfoCard label="Position" value={employee.positions?.name ?? "-"} />
       <InfoCard
         label="Skill grade"
         value={
@@ -75,16 +72,29 @@ export default function EmployeeModal({
   formatDate,
 }: ModalProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4" aria-modal="true" role="dialog">
-      <button className="absolute inset-0 bg-black/30" aria-label="Close" onClick={onClose} />
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center px-4"
+      aria-modal="true"
+      role="dialog"
+    >
+      <button
+        className="absolute inset-0 bg-black/30"
+        aria-label="Close"
+        onClick={onClose}
+      />
 
       <div className="relative w-full max-w-lg rounded-2xl border border-[var(--ikkimo-border)] bg-white p-6 shadow-lg">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="text-lg font-semibold">{employee.employee_name}</div>
-            <div className="mt-0.5 text-sm">{employee.preferred_name ?? "-"}</div>
+            <div className="text-lg font-semibold">
+              {employee.employee_name}
+            </div>
+            <div className="mt-0.5 text-sm">
+              {employee.preferred_name ?? "-"}
+            </div>
             <div className="mt-1 text-sm">
-              Nº ID Karyawan: <span className="font-medium">{employee.employee_code}</span>
+              Nº ID Karyawan:{" "}
+              <span className="font-medium">{employee.employee_code}</span>
             </div>
           </div>
 
