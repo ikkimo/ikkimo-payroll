@@ -8,7 +8,6 @@ const lato = Lato({
   variable: "--font-lato",
 });
 
-
 export const metadata: Metadata = {
   title: "Ikkimo Payroll",
   description: "Internal payroll system",
@@ -27,9 +26,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${lato.variable} font-sans antialiased`}
-      >
+      <body className={`${lato.variable} font-sans antialiased`}>
         {children}
       </body>
     </html>
