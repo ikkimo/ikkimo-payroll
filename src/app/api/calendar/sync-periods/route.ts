@@ -1,10 +1,10 @@
 import { syncWorkingDays } from "@/lib/calendar/syncWorkingDays";
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { createSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { NextRequest, NextResponse } from "next/server";
 
-// run this to get it to sync to the pay periods for a whole year (need the holidays to be in place)
-// http://localhost:3000/api/calendar/sync-periods?year=2026
 export async function GET(req: NextRequest) {
+  const supabaseAdmin = createSupabaseAdmin();
+
   const yearParam = req.nextUrl.searchParams.get("year");
   const year = Number(yearParam ?? new Date().getFullYear());
 
@@ -14,9 +14,8 @@ export async function GET(req: NextRequest) {
 
   const results = [];
 
-  
   for (let month = 1; month <= 12; month++) {
-    const { data: period, error: periodError } = await supabaseAdmin
+    const {  data: period, error: periodError } = await supabaseAdmin
       .from("payroll_periods")
       .select("id")
       .eq("year", year)
