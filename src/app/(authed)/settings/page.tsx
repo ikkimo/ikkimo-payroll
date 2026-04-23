@@ -127,7 +127,7 @@ export default function SettingsPage() {
   const [positionModalAllowance, setPositionModalAllowance] = useState("");
 
   // Skill grades modal
-  const [skillModalOpen, setSkillModalOpen] = useState(false);
+  // const [skillModalOpen, setSkillModalOpen] = useState(false);
   const [skillModalPositionId, setSkillModalPositionId] = useState<
     string | null
   >(null);
@@ -346,11 +346,11 @@ export default function SettingsPage() {
     }
   }
 
-  const positionsById = useMemo(() => {
-    const m = new Map<string, PositionRow>();
-    for (const p of positions) m.set(p.id, p);
-    return m;
-  }, [positions]);
+  // const positionsById = useMemo(() => {
+  //   const m = new Map<string, PositionRow>();
+  //   for (const p of positions) m.set(p.id, p);
+  //   return m;
+  // }, [positions]);
 
   const skillsByPosition = useMemo(() => {
     const m = new Map<string, SkillGradeRow[]>();
@@ -466,19 +466,19 @@ export default function SettingsPage() {
   }
 
   // ── Skill modal ──
-  function openSkillModal(positionId: string) {
-    setSkillModalPositionId(positionId);
-    setNewSkillPositionId(positionId);
-    cancelEditSkill();
-    setSkillGradesError(null);
-    setSkillModalOpen(true);
-  }
-  function closeSkillModal() {
-    setSkillModalOpen(false);
-    setSkillModalPositionId(null);
-    cancelEditSkill();
-    setSkillGradesError(null);
-  }
+  // function openSkillModal(positionId: string) {
+  //   setSkillModalPositionId(positionId);
+  //   setNewSkillPositionId(positionId);
+  //   cancelEditSkill();
+  //   setSkillGradesError(null);
+  //   setSkillModalOpen(true);
+  // }
+  // function closeSkillModal() {
+  //   setSkillModalOpen(false);
+  //   setSkillModalPositionId(null);
+  //   cancelEditSkill();
+  //   setSkillGradesError(null);
+  // }
 
   async function refreshPositions() {
     setPositionsLoading(true);
@@ -987,7 +987,7 @@ export default function SettingsPage() {
               ) : (
                 <div className="divide-y divide-[var(--ikkimo-border)] rounded-xl border border-[var(--ikkimo-border)]">
                   {filteredPositions.map((p) => {
-                    const grades = skillsByPosition.get(p.id) ?? [];
+                    // const grades = skillsByPosition.get(p.id) ?? [];
                     return (
                       <div
                         key={p.id}
