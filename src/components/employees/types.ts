@@ -45,7 +45,6 @@ export type BasicEmployeeRow = {
   bank_account_name: string | null;
 };
 
-
 export type EmployeeSortKey =
   | "internal_no"
   | "employee_code"

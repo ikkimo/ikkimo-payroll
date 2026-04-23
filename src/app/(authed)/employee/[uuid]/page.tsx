@@ -45,7 +45,7 @@ function parseYMDLocal(s: string) {
 
 const formatThrPayoutDate = (
   preference: "muslim" | "christian" | "balinese" | null | undefined,
-  settings: PayrollSettingsRow | null
+  settings: PayrollSettingsRow | null,
 ): string => {
   if (!preference || !settings) return "-";
 
@@ -53,8 +53,8 @@ const formatThrPayoutDate = (
     preference === "muslim"
       ? settings.thr_muslim_date
       : preference === "christian"
-      ? settings.thr_christian_date
-      : settings.thr_balinese_date;
+        ? settings.thr_christian_date
+        : settings.thr_balinese_date;
 
   if (!sourceDate) return "-";
 
@@ -62,8 +62,6 @@ const formatThrPayoutDate = (
   d.setDate(d.getDate() - 7);
   return formatDateEn(d.toISOString().slice(0, 10));
 };
-
-
 
 export default function EmployeePage() {
   const router = useRouter();
@@ -92,11 +90,13 @@ export default function EmployeePage() {
 
   const [newPositionName, setNewPositionName] = useState("");
   const [creatingPosition, setCreatingPosition] = useState(false);
-  const [positionCreateError, setPositionCreateError] = useState<string | null>(null);
+  const [positionCreateError, setPositionCreateError] = useState<string | null>(
+    null,
+  );
   const [positionSelectValue, setPositionSelectValue] = useState<string>("");
 
-  const [payrollSettings, setPayrollSettings] = useState<PayrollSettingsRow | null>(null);
-
+  const [payrollSettings, setPayrollSettings] =
+    useState<PayrollSettingsRow | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -118,17 +118,24 @@ export default function EmployeePage() {
         supabase
           .from("employees")
           .select(
-            "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, gets_bpjs_jp, thr_preference, cash_loan_balance_idr, housing_allowance_idr, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name)"
+            "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, gets_bpjs_jp, thr_preference, cash_loan_balance_idr, housing_allowance_idr, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name)",
           )
           .eq("uuid", uuid)
           .maybeSingle(),
-        supabase.from("positions").select("id, name").order("name", { ascending: true }),
+        supabase
+          .from("positions")
+          .select("id, name")
+          .order("name", { ascending: true }),
         supabase
           .from("skill_grades")
           .select("id, position_id, level, increase_monthly_idr")
           .order("position_id", { ascending: true })
           .order("level", { ascending: true }),
-        supabase.from("payroll_settings").select("thr_balinese_date, thr_christian_date, thr_muslim_date").limit(1).maybeSingle(),
+        supabase
+          .from("payroll_settings")
+          .select("thr_balinese_date, thr_christian_date, thr_muslim_date")
+          .limit(1)
+          .maybeSingle(),
       ]);
 
       if (!alive) return;
@@ -137,7 +144,9 @@ export default function EmployeePage() {
         setError(empRes.error.message);
         setEmployee(null);
       } else {
-        setEmployee((empRes.data as unknown as EditableEmployee | null) ?? null);
+        setEmployee(
+          (empRes.data as unknown as EditableEmployee | null) ?? null,
+        );
         setEditing(false);
         setSnapshot(null);
         setDirty(false);
@@ -151,13 +160,15 @@ export default function EmployeePage() {
       else setSkillGrades((skillRes.data as unknown as SkillGradeRow[]) ?? []);
 
       if (settingsRes.error) setPayrollSettings(null);
-      else setPayrollSettings(settingsRes.data as unknown as PayrollSettingsRow | null);
+      else
+        setPayrollSettings(
+          settingsRes.data as unknown as PayrollSettingsRow | null,
+        );
 
       // Initialize position select value when employee loads
-      const emp =
-        empRes.data as unknown as
-          | (EditableEmployee & { positions?: { id?: string } | null })
-          | null;
+      const emp = empRes.data as unknown as
+        | (EditableEmployee & { positions?: { id?: string } | null })
+        | null;
 
       const pid = emp?.position_id ?? emp?.positions?.id ?? "";
       setPositionSelectValue(typeof pid === "string" ? pid : "");
@@ -180,11 +191,10 @@ export default function EmployeePage() {
   function getDefaultSkillGradeId(positionId: string | null | undefined) {
     if (!positionId) return null;
     const level1 = skillGrades.find(
-      (g) => g.position_id === positionId && Number(g.level) === 1
+      (g) => g.position_id === positionId && Number(g.level) === 1,
     );
     return level1?.id ?? null;
   }
-
 
   function startEdit() {
     if (!employee) return;
@@ -248,7 +258,6 @@ export default function EmployeePage() {
   async function commitSave() {
     if (!employee) return;
 
-
     setSaving(true);
     setError(null);
     setSavedMsg(null);
@@ -263,8 +272,9 @@ export default function EmployeePage() {
       start_date: employee.start_date ?? null,
       active: employee.active,
       basic: employee.basic ?? 0,
-      position_id: employee.position_id ?? (employee.positions?.id ?? null),
-      skill_grade_id: employee.skill_grade_id ?? (employee.skill_grades?.id ?? null),
+      position_id: employee.position_id ?? employee.positions?.id ?? null,
+      skill_grade_id:
+        employee.skill_grade_id ?? employee.skill_grades?.id ?? null,
       gets_bpjs_jp: employee.gets_bpjs_jp,
       housing_allowance_idr: employee.housing_allowance_idr ?? 0,
       // Do NOT update probation here!
@@ -273,9 +283,9 @@ export default function EmployeePage() {
     const res = await supabase
       .from("employees")
       .update(payload)
-      .eq("uuid", employee. uuid)
+      .eq("uuid", employee.uuid)
       .select(
-        "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, housing_allowance_idr, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name), gets_bpjs_jp"
+        "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, housing_allowance_idr, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name), gets_bpjs_jp",
       )
       .maybeSingle();
 
@@ -335,62 +345,62 @@ export default function EmployeePage() {
   }
 
   function updateEmployee<K extends keyof EditableEmployee>(
-  key: K,
-  value: EditableEmployee[K]
-) {
-  if (!editing) return;
+    key: K,
+    value: EditableEmployee[K],
+  ) {
+    if (!editing) return;
 
-  setEmployee((prev) => {
-    if (!prev) return prev;
-    return { ...prev, [key]: value };
-  });
+    setEmployee((prev) => {
+      if (!prev) return prev;
+      return { ...prev, [key]: value };
+    });
 
-  setDirty(true);
-  setSavedMsg(null);
-}
-
-async function createPositionAndSelect() {
-  const name = newPositionName.trim();
-  if (!name) {
-    setPositionCreateError("Position name is required.");
-    return;
+    setDirty(true);
+    setSavedMsg(null);
   }
 
-  setCreatingPosition(true);
-  setPositionCreateError(null);
+  async function createPositionAndSelect() {
+    const name = newPositionName.trim();
+    if (!name) {
+      setPositionCreateError("Position name is required.");
+      return;
+    }
 
-  const insertRes = await supabase
-    .from("positions")
-    .insert({ name })
-    .select("id, name")
-    .single();
+    setCreatingPosition(true);
+    setPositionCreateError(null);
 
-  if (insertRes.error) {
-    setPositionCreateError(insertRes.error.message);
+    const insertRes = await supabase
+      .from("positions")
+      .insert({ name })
+      .select("id, name")
+      .single();
+
+    if (insertRes.error) {
+      setPositionCreateError(insertRes.error.message);
+      setCreatingPosition(false);
+      return;
+    }
+
+    const created = insertRes.data as unknown as PositionRow;
+
+    const posRes = await supabase
+      .from("positions")
+      .select("id, name")
+      .order("name", { ascending: true });
+
+    if (!posRes.error) {
+      setPositions((posRes.data as unknown as PositionRow[]) ?? []);
+    }
+
+    setPositionSelectValue(created.id);
+    updateEmployee("position_id", created.id);
+
+    const defaultSkillGradeId = getDefaultSkillGradeId(created.id);
+    updateEmployee("skill_grade_id", defaultSkillGradeId);
+
+    setNewPositionName("");
     setCreatingPosition(false);
-    return;
   }
-
-  const created = insertRes.data as unknown as PositionRow;
-
-  const posRes = await supabase
-    .from("positions")
-    .select("id, name")
-    .order("name", { ascending: true });
-
-  if (!posRes.error) {
-    setPositions((posRes.data as unknown as PositionRow[]) ?? []);
-  }
-
-  setPositionSelectValue(created.id);
-  updateEmployee("position_id", created.id);
-
-  const defaultSkillGradeId = getDefaultSkillGradeId(created.id);
-  updateEmployee("skill_grade_id", defaultSkillGradeId);
-
-  setNewPositionName("");
-  setCreatingPosition(false);
-}
 
   return (
     <>
@@ -413,8 +423,12 @@ async function createPositionAndSelect() {
               <div className="min-w-0 flex-1">
                 {!editing ? (
                   <>
-                    <div className="text-lg font-semibold">{employee.employee_name}</div>
-                    <div className="mt-0.5 text-sm">{employee.preferred_name ?? "-"}</div>
+                    <div className="text-lg font-semibold">
+                      {employee.employee_name}
+                    </div>
+                    <div className="mt-0.5 text-sm">
+                      {employee.preferred_name ?? "-"}
+                    </div>
                   </>
                 ) : (
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -423,31 +437,48 @@ async function createPositionAndSelect() {
                       <input
                         className="mt-1 w-full rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
                         value={employee.employee_name}
-                        onChange={(e) => updateEmployee("employee_name", e.target.value)}
+                        onChange={(e) =>
+                          updateEmployee("employee_name", e.target.value)
+                        }
                       />
                     </label>
 
                     <label className="block">
-                      <div className="text-xs font-semibold">Preferred name</div>
+                      <div className="text-xs font-semibold">
+                        Preferred name
+                      </div>
                       <input
                         className="mt-1 w-full rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
                         value={employee.preferred_name ?? ""}
-                        onChange={(e) => updateEmployee("preferred_name", e.target.value || null)}
+                        onChange={(e) =>
+                          updateEmployee(
+                            "preferred_name",
+                            e.target.value || null,
+                          )
+                        }
                       />
                     </label>
                   </div>
                 )}
 
                 <div className="mt-1 text-sm">
-                  Nº ID Karyawan: <span className="font-medium">{employee.employee_code}</span>
+                  Nº ID Karyawan:{" "}
+                  <span className="font-medium">{employee.employee_code}</span>
                 </div>
                 <div className="mt-1 text-sm">
-                  Fingerprint ID: <span className="font-medium">{employee.fingerprint_id ?? "-"}</span>
+                  Fingerprint ID:{" "}
+                  <span className="font-medium">
+                    {employee.fingerprint_id ?? "-"}
+                  </span>
                 </div>
                 <div className="text-xs text-gray-500">
-                  THR: {capitalizeFirst(employee.thr_preference) ?? "missing"} | Date to pay: {formatThrPayoutDate(employee.thr_preference, payrollSettings) ?? "missing"}
+                  THR: {capitalizeFirst(employee.thr_preference) ?? "missing"} |
+                  Date to pay:{" "}
+                  {formatThrPayoutDate(
+                    employee.thr_preference,
+                    payrollSettings,
+                  ) ?? "missing"}
                 </div>
-
               </div>
 
               <div className="flex items-center gap-2">
@@ -467,16 +498,23 @@ async function createPositionAndSelect() {
                         </button>
 
                         {confirmProbationOpen && (
-                          <div className="fixed inset-0 z-50 flex items-center justify-center px-4" role="dialog">
+                          <div
+                            className="fixed inset-0 z-50 flex items-center justify-center px-4"
+                            role="dialog"
+                          >
                             <button
                               className="absolute inset-0 bg-black/30"
                               aria-label="Close"
                               onClick={() => setConfirmProbationOpen(false)}
                             />
                             <div className="relative w-full max-w-md rounded-2xl border border-[var(--ikkimo-border)] bg-white p-6 shadow-lg">
-                              <div className="text-lg font-semibold">End Probation?</div>
+                              <div className="text-lg font-semibold">
+                                End Probation?
+                              </div>
                               <div className="mt-2 text-sm">
-                                Are you sure you want to end this employee&apos;s probation? This action cannot be undone.
+                                Are you sure you want to end this
+                                employee&apos;s probation? This action cannot be
+                                undone.
                               </div>
                               <div className="mt-6 flex justify-end gap-3">
                                 <button
@@ -529,7 +567,9 @@ async function createPositionAndSelect() {
               {/* Start date */}
               <div>
                 <div className="text-xs font-semibold">Start date</div>
-                <div className="mt-1 text-sm">{formatDateEn(employee.start_date)}</div>
+                <div className="mt-1 text-sm">
+                  {formatDateEn(employee.start_date)}
+                </div>
               </div>
 
               {/* Seniority (read-only) */}
@@ -544,7 +584,9 @@ async function createPositionAndSelect() {
               <div>
                 <div className="text-xs font-semibold">Position</div>
                 {!editing ? (
-                  <div className="mt-1 text-sm">{employee.positions?.name ?? "-"}</div>
+                  <div className="mt-1 text-sm">
+                    {employee.positions?.name ?? "-"}
+                  </div>
                 ) : (
                   <div className="mt-1 space-y-2">
                     <select
@@ -558,7 +600,9 @@ async function createPositionAndSelect() {
                         if (v === "__new__") {
                           updateEmployee(
                             "position_id",
-                            employee.position_id ?? employee.positions?.id ?? ""
+                            employee.position_id ??
+                              employee.positions?.id ??
+                              "",
                           );
                           return;
                         }
@@ -569,7 +613,6 @@ async function createPositionAndSelect() {
 
                         const defaultSkillGradeId = getDefaultSkillGradeId(v);
                         updateEmployee("skill_grade_id", defaultSkillGradeId);
-
                       }}
                     >
                       <option value="" disabled>
@@ -585,7 +628,9 @@ async function createPositionAndSelect() {
 
                     {positionSelectValue === "__new__" ? (
                       <div className="rounded-xl border border-[var(--ikkimo-border)] p-3">
-                        <div className="text-xs font-semibold">New position</div>
+                        <div className="text-xs font-semibold">
+                          New position
+                        </div>
                         <input
                           className="mt-2 w-full rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
                           value={newPositionName}
@@ -598,7 +643,10 @@ async function createPositionAndSelect() {
 
                         {positionCreateError ? (
                           <div className="mt-2 text-xs">
-                            Error: <span className="font-medium">{positionCreateError}</span>
+                            Error:{" "}
+                            <span className="font-medium">
+                              {positionCreateError}
+                            </span>
                           </div>
                         ) : null}
 
@@ -630,14 +678,16 @@ async function createPositionAndSelect() {
                   </div>
                 ) : (
                   (() => {
-                    const pid = employee.position_id ?? employee.positions?.id ?? "";
-                    const options = skillGrades.filter((g) => g.position_id === pid);
+                    const pid =
+                      employee.position_id ?? employee.positions?.id ?? "";
+                    const options = skillGrades.filter(
+                      (g) => g.position_id === pid,
+                    );
                     const current =
                       employee.skill_grade_id ??
                       employee.skill_grades?.id ??
                       getDefaultSkillGradeId(pid) ??
                       "";
-
 
                     return (
                       <select
@@ -648,9 +698,13 @@ async function createPositionAndSelect() {
                         }
                         disabled={!pid || options.length === 0}
                       >
-                        {!pid ? <option value="">Select position first</option> : null}
+                        {!pid ? (
+                          <option value="">Select position first</option>
+                        ) : null}
                         {pid && options.length === 0 ? (
-                          <option value="">No skill grades for this position</option>
+                          <option value="">
+                            No skill grades for this position
+                          </option>
                         ) : null}
 
                         {options.map((g) => (
@@ -671,7 +725,9 @@ async function createPositionAndSelect() {
               <div>
                 <div className="text-xs font-semibold">Department</div>
                 {!editing ? (
-                  <div className="mt-1 text-sm">{employee.department ?? "-"}</div>
+                  <div className="mt-1 text-sm">
+                    {employee.department ?? "-"}
+                  </div>
                 ) : (
                   <input
                     className="mt-1 w-full rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
@@ -687,7 +743,9 @@ async function createPositionAndSelect() {
               <div>
                 <div className="text-xs font-semibold">Basic (IDR)</div>
                 {!editing ? (
-                  <div className="mt-1 text-sm">{formatIDR(employee.basic ?? 0)}</div>
+                  <div className="mt-1 text-sm">
+                    {formatIDR(employee.basic ?? 0)}
+                  </div>
                 ) : (
                   <input
                     className="mt-1 w-full rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
@@ -703,9 +761,13 @@ async function createPositionAndSelect() {
 
               {/* Housing allowance */}
               <div>
-                <div className="text-xs font-semibold">Housing allowance (IDR)</div>
+                <div className="text-xs font-semibold">
+                  Housing allowance (IDR)
+                </div>
                 {!editing ? (
-                  <div className="mt-1 text-sm">{formatIDR(employee.housing_allowance_idr ?? 0)}</div>
+                  <div className="mt-1 text-sm">
+                    {formatIDR(employee.housing_allowance_idr ?? 0)}
+                  </div>
                 ) : (
                   <input
                     className="mt-1 w-full rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
@@ -713,16 +775,20 @@ async function createPositionAndSelect() {
                     value={String(employee.housing_allowance_idr ?? 0)}
                     onChange={(e) => {
                       const n = Number(e.target.value);
-                      updateEmployee("housing_allowance_idr", Number.isFinite(n) ? n : 0);
+                      updateEmployee(
+                        "housing_allowance_idr",
+                        Number.isFinite(n) ? n : 0,
+                      );
                     }}
                   />
                 )}
               </div>
 
-
               {/* Receives Pension */}
               <div>
-                <div className="text-xs font-semibold">Receives Pension (BPJS - JP)</div>
+                <div className="text-xs font-semibold">
+                  Receives Pension (BPJS - JP)
+                </div>
                 {!editing ? (
                   <div className="mt-1 text-sm text-gray-500">
                     {employee.gets_bpjs_jp ? "Yes" : "No"}
@@ -732,10 +798,14 @@ async function createPositionAndSelect() {
                     <input
                       type="checkbox"
                       checked={employee.gets_bpjs_jp ?? false}
-                      onChange={(e) => updateEmployee("gets_bpjs_jp", e.target.checked)}
+                      onChange={(e) =>
+                        updateEmployee("gets_bpjs_jp", e.target.checked)
+                      }
                       className="rounded border-[var(--ikkimo-border)] bg-white text-[var(--ikkimo-brand)]"
                     />
-                    <span className="text-sm">{employee.gets_bpjs_jp ? "Yes" : "No"}</span>
+                    <span className="text-sm">
+                      {employee.gets_bpjs_jp ? "Yes" : "No"}
+                    </span>
                   </label>
                 )}
               </div>
@@ -743,14 +813,14 @@ async function createPositionAndSelect() {
               {/* Cash Loan Balance */}
               {employee.cash_loan_balance_idr > 0 && (
                 <div>
-                  <div className="text-xs font-semibold">Cash loan balance (IDR)</div>
+                  <div className="text-xs font-semibold">
+                    Cash loan balance (IDR)
+                  </div>
                   <div className="mt-1 text-sm text-red-600 font-medium">
                     {formatIDR(employee.cash_loan_balance_idr)}
                   </div>
                 </div>
               )}
-
-
             </div>
           </>
         )}
@@ -790,16 +860,32 @@ function ConfirmSaveModal(props: {
   const { password, setPassword, error, onCancel, onConfirm } = props;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4" aria-modal="true" role="dialog">
-      <button className="absolute inset-0 bg-black/30" aria-label="Close" onClick={onCancel} />
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center px-4"
+      aria-modal="true"
+      role="dialog"
+    >
+      <button
+        className="absolute inset-0 bg-black/30"
+        aria-label="Close"
+        onClick={onCancel}
+      />
 
       <div className="relative w-full max-w-lg rounded-2xl border border-[var(--ikkimo-border)] bg-white p-6 shadow-lg">
         <div className="text-lg font-semibold">Confirm changes</div>
-        <div className="mt-2 text-sm">These changes can affect payroll calculations. Only continue if you are sure.</div>
+        <div className="mt-2 text-sm">
+          These changes can affect payroll calculations. Only continue if you
+          are sure.
+        </div>
 
         <div className="mt-5 rounded-xl border border-[var(--ikkimo-border)] p-4">
-          <div className="text-xs font-semibold">Confirm with your password</div>
-          <div className="mt-2 text-xs">Enter your password, then click <span className="font-semibold">Confirm save</span>.</div>
+          <div className="text-xs font-semibold">
+            Confirm with your password
+          </div>
+          <div className="mt-2 text-xs">
+            Enter your password, then click{" "}
+            <span className="font-semibold">Confirm save</span>.
+          </div>
           <input
             className="mt-2 w-full rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
             type="password"
@@ -811,7 +897,9 @@ function ConfirmSaveModal(props: {
         </div>
 
         {error ? (
-          <div className="mt-4 text-sm">Error: <span className="font-medium">{error}</span></div>
+          <div className="mt-4 text-sm">
+            Error: <span className="font-medium">{error}</span>
+          </div>
         ) : null}
 
         <div className="mt-6 flex items-center justify-end gap-3">

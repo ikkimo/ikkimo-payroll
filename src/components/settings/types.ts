@@ -35,7 +35,6 @@ export type PayrollSettingsRow = {
   updated_at?: string;
 };
 
-
 export type PositionRow = {
   id: string;
   name: string;

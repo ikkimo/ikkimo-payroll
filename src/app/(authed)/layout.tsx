@@ -10,7 +10,13 @@ export default function AuthedLayout({ children }: { children: ReactNode }) {
       <header className="border-b border-[var(--ikkimo-border)] bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <Link href="/home" className="flex items-center gap-3">
-            <Image src="/ikkimo_logo.png" alt="iKKim’O" width={36} height={36} priority />
+            <Image
+              src="/ikkimo_logo.png"
+              alt="iKKim’O"
+              width={36}
+              height={36}
+              priority
+            />
             <div className="text-sm font-semibold">iKKim’O Payroll</div>
           </Link>
 
