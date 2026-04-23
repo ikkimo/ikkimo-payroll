@@ -14,15 +14,17 @@ export type BasicEmployeeRow = {
 
   fingerprint_id?: string | null;
   probation?: boolean;
-  gets_bpjs_jp?: boolean;
+  gets_bpjs_jp: boolean;
   thr_preference?: ThrReligion | null;
   cash_loan_balance_idr: number;
+
+  housing_allowance_idr?: number | null;
+  gets_meal_allowance: boolean;
 
   position_id: string;
   positions?: {
     id: string;
     name: string;
-    allowance_idr?: number | null;
   } | null;
 
   seniority_grades?: {
@@ -37,6 +39,10 @@ export type BasicEmployeeRow = {
     level: number | null;
     increase_monthly_idr?: number | null;
   } | null;
+
+  bank: string | null;
+  bank_account: string | null;
+  bank_account_name: string | null;
 };
 
 

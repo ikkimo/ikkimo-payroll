@@ -13,7 +13,6 @@ import type { PayrollSettingsRow } from "@/components/settings/types";
 type PositionRow = {
   id: string;
   name: string;
-  allowance_idr?: number | null;
 };
 
 type SkillGradeRow = {
@@ -119,11 +118,11 @@ export default function EmployeePage() {
         supabase
           .from("employees")
           .select(
-            "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, gets_bpjs_jp, thr_preference, cash_loan_balance_idr, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name, allowance_idr)"
+            "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, gets_bpjs_jp, thr_preference, cash_loan_balance_idr, housing_allowance_idr, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name)"
           )
           .eq("uuid", uuid)
           .maybeSingle(),
-        supabase.from("positions").select("id, name, allowance_idr").order("name", { ascending: true }),
+        supabase.from("positions").select("id, name").order("name", { ascending: true }),
         supabase
           .from("skill_grades")
           .select("id, position_id, level, increase_monthly_idr")
@@ -177,6 +176,15 @@ export default function EmployeePage() {
   //   await supabase.auth.signOut();
   //   router.replace("/login");
   // }
+
+  function getDefaultSkillGradeId(positionId: string | null | undefined) {
+    if (!positionId) return null;
+    const level1 = skillGrades.find(
+      (g) => g.position_id === positionId && Number(g.level) === 1
+    );
+    return level1?.id ?? null;
+  }
+
 
   function startEdit() {
     if (!employee) return;
@@ -258,6 +266,7 @@ export default function EmployeePage() {
       position_id: employee.position_id ?? (employee.positions?.id ?? null),
       skill_grade_id: employee.skill_grade_id ?? (employee.skill_grades?.id ?? null),
       gets_bpjs_jp: employee.gets_bpjs_jp,
+      housing_allowance_idr: employee.housing_allowance_idr ?? 0,
       // Do NOT update probation here!
     };
 
@@ -266,7 +275,7 @@ export default function EmployeePage() {
       .update(payload)
       .eq("uuid", employee. uuid)
       .select(
-        "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name, allowance_idr), gets_bpjs_jp"
+        "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, housing_allowance_idr, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name), gets_bpjs_jp"
       )
       .maybeSingle();
 
@@ -352,8 +361,8 @@ async function createPositionAndSelect() {
 
   const insertRes = await supabase
     .from("positions")
-    .insert({ name, allowance_idr: 0 })
-    .select("id, name, allowance_idr")
+    .insert({ name })
+    .select("id, name")
     .single();
 
   if (insertRes.error) {
@@ -366,7 +375,7 @@ async function createPositionAndSelect() {
 
   const posRes = await supabase
     .from("positions")
-    .select("id, name, allowance_idr")
+    .select("id, name")
     .order("name", { ascending: true });
 
   if (!posRes.error) {
@@ -376,8 +385,8 @@ async function createPositionAndSelect() {
   setPositionSelectValue(created.id);
   updateEmployee("position_id", created.id);
 
-  // new position -> skill grade likely needs re-selection
-  updateEmployee("skill_grade_id", null);
+  const defaultSkillGradeId = getDefaultSkillGradeId(created.id);
+  updateEmployee("skill_grade_id", defaultSkillGradeId);
 
   setNewPositionName("");
   setCreatingPosition(false);
@@ -524,12 +533,12 @@ async function createPositionAndSelect() {
               </div>
 
               {/* Seniority (read-only) */}
-              <div>
+              {/* <div>
                 <div className="text-xs font-semibold">Seniority</div>
                 <div className="mt-1 text-sm">
                   {employee.seniority_grades?.grade ?? "-"}
                 </div>
-              </div>
+              </div> */}
 
               {/* Position */}
               <div>
@@ -558,14 +567,9 @@ async function createPositionAndSelect() {
 
                         updateEmployee("position_id", v);
 
-                        const currentSkillId =
-                          employee.skill_grade_id ?? employee.skill_grades?.id ?? null;
+                        const defaultSkillGradeId = getDefaultSkillGradeId(v);
+                        updateEmployee("skill_grade_id", defaultSkillGradeId);
 
-                        if (currentSkillId) {
-                          const sg = skillGrades.find((x) => x.id === currentSkillId);
-                          if (sg && sg.position_id !== v)
-                            updateEmployee("skill_grade_id", null);
-                        }
                       }}
                     >
                       <option value="" disabled>
@@ -629,14 +633,18 @@ async function createPositionAndSelect() {
                     const pid = employee.position_id ?? employee.positions?.id ?? "";
                     const options = skillGrades.filter((g) => g.position_id === pid);
                     const current =
-                      employee.skill_grade_id ?? employee.skill_grades?.id ?? "";
+                      employee.skill_grade_id ??
+                      employee.skill_grades?.id ??
+                      getDefaultSkillGradeId(pid) ??
+                      "";
+
 
                     return (
                       <select
                         className="mt-1 w-full rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
                         value={current}
                         onChange={(e) =>
-                          updateEmployee("skill_grade_id", e.target.value || null)
+                          updateEmployee("skill_grade_id", e.target.value)
                         }
                         disabled={!pid || options.length === 0}
                       >
@@ -644,7 +652,6 @@ async function createPositionAndSelect() {
                         {pid && options.length === 0 ? (
                           <option value="">No skill grades for this position</option>
                         ) : null}
-                        {options.length > 0 ? <option value="">None</option> : null}
 
                         {options.map((g) => (
                           <option key={g.id} value={g.id}>
@@ -694,9 +701,28 @@ async function createPositionAndSelect() {
                 )}
               </div>
 
+              {/* Housing allowance */}
+              <div>
+                <div className="text-xs font-semibold">Housing allowance (IDR)</div>
+                {!editing ? (
+                  <div className="mt-1 text-sm">{formatIDR(employee.housing_allowance_idr ?? 0)}</div>
+                ) : (
+                  <input
+                    className="mt-1 w-full rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
+                    type="number"
+                    value={String(employee.housing_allowance_idr ?? 0)}
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      updateEmployee("housing_allowance_idr", Number.isFinite(n) ? n : 0);
+                    }}
+                  />
+                )}
+              </div>
+
+
               {/* Receives Pension */}
               <div>
-                <div className="text-xs font-semibold">Receives Pension (BPJS - JP )</div>
+                <div className="text-xs font-semibold">Receives Pension (BPJS - JP)</div>
                 {!editing ? (
                   <div className="mt-1 text-sm text-gray-500">
                     {employee.gets_bpjs_jp ? "Yes" : "No"}

@@ -23,6 +23,14 @@ export type PayrollSettingsRow = {
 
   payroll_end_date: number;
 
+  meal_allowance_per_day_idr: number;
+  attendance_reward_idr: number;
+
+  lateness_base_deduction_idr: number;
+  lateness_base_minutes: number;
+  lateness_increment_idr: number;
+  lateness_increment_minutes: number;
+
   created_at?: string;
   updated_at?: string;
 };
