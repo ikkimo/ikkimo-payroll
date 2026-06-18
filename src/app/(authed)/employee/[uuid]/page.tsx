@@ -44,7 +44,7 @@ function parseYMDLocal(s: string) {
 }
 
 const formatThrPayoutDate = (
-  preference: "muslim" | "christian" | "balinese" | null | undefined,
+  preference: "muslim" | "christian" | "hindu" | null | undefined,
   settings: PayrollSettingsRow | null,
 ): string => {
   if (!preference || !settings) return "-";
@@ -54,7 +54,7 @@ const formatThrPayoutDate = (
       ? settings.thr_muslim_date
       : preference === "christian"
         ? settings.thr_christian_date
-        : settings.thr_balinese_date;
+        : settings.thr_hindu_date;
 
   if (!sourceDate) return "-";
 
@@ -133,7 +133,7 @@ export default function EmployeePage() {
           .order("level", { ascending: true }),
         supabase
           .from("payroll_settings")
-          .select("thr_balinese_date, thr_christian_date, thr_muslim_date")
+          .select("thr_hindu_date, thr_christian_date, thr_muslim_date")
           .limit(1)
           .maybeSingle(),
       ]);
