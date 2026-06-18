@@ -188,13 +188,17 @@ function computeRow(
     safe(input.late_minutes_count),
     settings,
   );
-  //! check that this is correct as it does not include sick leave (might have to differentiate between sick and AL)
-  const attendanceReward =
+  // Full attendance reward — paid only when there are zero excused AND zero
+  // unexcused absences for the period (equivalent to full_days_worked ===
+  // period working days). Lateness and overtime do not affect eligibility.
+  const hasPerfectAttendance =
+    safe(input.excused_full_days) === 0 &&
+    safe(input.excused_half_days) === 0 &&
     safe(input.unexcused_full_days) === 0 &&
-    safe(input.unexcused_half_days) === 0 &&
-    safe(input.late_minutes_count) === 0
-      ? safe(settings.attendance_reward_idr) || 100000
-      : 0;
+    safe(input.unexcused_half_days) === 0;
+  const attendanceReward = hasPerfectAttendance
+    ? safe(settings.attendance_reward_idr) || 100000
+    : 0;
 
   // const absentDays = safe(input.excused_full_days) + safe(input.unexcused_full_days) + safe(input.excused_half_days) + safe(input.unexcused_half_days);
   const halfDaysCount =
@@ -212,9 +216,10 @@ function computeRow(
   const gross =
     mainSalary +
     housingAllowance +
-    mealAllowance -
+    mealAllowance +
+    attendanceReward -
     unexcusedDeduction -
-    latenessDeduction; //! removed seniorityIncrease for now //! add attendance reward
+    latenessDeduction; //! removed seniorityIncrease for now
 
   const bpjsEmpJHT = Math.round(mainSalary * safe(settings.bpjs_employee_jht));
   const bpjsEmpJP = emp.gets_bpjs_jp
@@ -438,6 +443,12 @@ function BreakdownCard({ row }: { row: PayrollRow }) {
                 <Line
                   label={`Meal (${row.meal_eligible_days}d)`}
                   value={formatIDR(row.meal_allowance)}
+                />
+              )}
+              {row.attendance_reward > 0 && (
+                <Line
+                  label="Attendance reward"
+                  value={formatIDR(row.attendance_reward)}
                 />
               )}
               <div className="mt-1 border-t border-[var(--ikkimo-border)] pt-1">
@@ -1658,7 +1669,7 @@ function PayrollFormPageInner() {
                         row.lateness_deduction +
                         row.bpjs_employee_jht +
                         row.bpjs_employee_jp +
-                        row.loan_repayment; //! -row.attendance_reward
+                        row.loan_repayment;
                       return (
                         <Fragment key={id}>
                           <tr className="hover:bg-[var(--ikkimo-surface,#fafafa)]">
@@ -1698,8 +1709,7 @@ function PayrollFormPageInner() {
                       <Td
                         right
                         red
-                      >{`− ${formatIDR(totals.unexcused_deduction + totals.lateness_deduction + totals.bpjs_employee_jht + totals.bpjs_employee_jp + totals.loan_repayment)}`}</Td>{" "}
-                      {/*//! - totals.attendance_reward*/}
+                      >{`− ${formatIDR(totals.unexcused_deduction + totals.lateness_deduction + totals.bpjs_employee_jht + totals.bpjs_employee_jp + totals.loan_repayment)}`}</Td>
                       <Td right>
                         <span className="font-bold">
                           {formatIDR(totals.net_pay)}
