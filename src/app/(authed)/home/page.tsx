@@ -170,6 +170,12 @@ export default function HomePage() {
   const [period, setPeriod] = useState<PayrollPeriod | null>(null);
   const [periodError, setPeriodError] = useState<string | null>(null);
   const [periodLoading, setPeriodLoading] = useState(true);
+  const [draftSession, setDraftSession] = useState<{
+    id: string;
+    year: number;
+    month: number;
+  } | null>(null);
+  const [draftLoading, setDraftLoading] = useState(true);
 
   useEffect(() => {
     let alive = true;
@@ -276,6 +282,33 @@ export default function HomePage() {
         }
       }
 
+      // In-progress session = unlocked period with at least one saved entry.
+      // Inner join on payroll_entries means a period only comes back if entries exist.
+      const draftRes = await supabase
+        .from("payroll_periods")
+        .select("id, year, month, payroll_entries!inner(id)")
+        .eq("locked", false)
+        .order("year", { ascending: false })
+        .order("month", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (alive) {
+        if (draftRes.error) {
+          console.error("draft session lookup error:", draftRes.error);
+          setDraftSession(null);
+        } else if (draftRes.data) {
+          setDraftSession({
+            id: draftRes.data.id,
+            year: draftRes.data.year,
+            month: draftRes.data.month,
+          });
+        } else {
+          setDraftSession(null);
+        }
+        setDraftLoading(false);
+      }
+
       setPeriod(periodRow);
       setPeriodError(periodErr);
       if (periodErr) console.error("payroll_periods error:", periodErr);
@@ -332,22 +365,22 @@ export default function HomePage() {
         <section className="flex-1 rounded-2xl border border-[var(--ikkimo-border)] bg-white p-5">
           <div className="text-sm font-semibold">Monthly session</div>
           <div className="mt-2 text-sm">
-            Create a monthly input run for the selected payroll period.
+            {draftLoading
+              ? "Checking for an in-progress session…"
+              : draftSession
+                ? `You have a saved draft for ${monthName(draftSession.month)} ${draftSession.year}.`
+                : "Create a monthly input run for the selected payroll period."}
           </div>
 
-          {/* <button
-            disabled
-            className="mt-4 w-full rounded-xl bg-[var(--ikkimo-brand)] py-2.5 text-sm font-semibold text-white disabled:opacity-100 disabled:cursor-not-allowed"
-            title="We’ll enable this once periods + input table are wired."
-          >
-            Start payroll session
-          </button> */}
-          {/* <Link href="/payroll" className="w-full block text-center rounded-xl bg-[var(--ikkimo-brand)] py-2.5 text-sm font-semibold text-white hover:bg-[var(--ikkimo-brand-hover)]"> */}
           <Link
-            href="/payroll"
+            href={
+              draftSession
+                ? `/payroll?year=${draftSession.year}&month=${draftSession.month}`
+                : "/payroll"
+            }
             className="mt-4 w-full block text-center rounded-xl bg-[var(--ikkimo-brand)] py-2.5 text-sm font-semibold text-white hover:bg-[var(--ikkimo-brand-hover)]"
           >
-            Start payroll session
+            {draftSession ? "Resume session" : "Start payroll session"}
           </Link>
         </section>
       </div>
