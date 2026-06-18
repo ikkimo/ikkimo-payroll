@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { Fragment, Suspense, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { verifyCurrentUserPassword } from "@/lib/auth";
 import { formatIDR } from "@/lib/formatters";
 import type { BasicEmployeeRow } from "@/components/employees/types";
 import type { PayrollSettingsRow } from "@/components/settings/types";
@@ -955,22 +956,9 @@ function PayrollFormPageInner() {
   // ---------------------------------------------------------------------------
   async function verifyResetPassword(): Promise<boolean> {
     setResetError(null);
-    if (!resetPassword) {
-      setResetError("Enter your password to continue.");
-      return false;
-    }
-    const { data: userData } = await supabase.auth.getUser();
-    const currentEmail = userData?.user?.email;
-    if (!currentEmail) {
-      setResetError("Could not verify current session.");
-      return false;
-    }
-    const { error: authErr } = await supabase.auth.signInWithPassword({
-      email: currentEmail,
-      password: resetPassword,
-    });
-    if (authErr) {
-      setResetError("Password is incorrect.");
+    const result = await verifyCurrentUserPassword(resetPassword);
+    if (!result.ok) {
+      setResetError(result.error);
       return false;
     }
     setResetPassword("");
