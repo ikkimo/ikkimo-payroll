@@ -2,7 +2,7 @@
 
 export const dynamic = "force-dynamic";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, Suspense, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { formatIDR } from "@/lib/formatters";
 import type { BasicEmployeeRow } from "@/components/employees/types";
@@ -565,7 +565,7 @@ function Line({
 // Page
 // ---------------------------------------------------------------------------
 
-export default function PayrollFormPage() {
+function PayrollFormPageInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -1569,5 +1569,18 @@ export default function PayrollFormPage() {
         </>
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Default export: wraps the page in Suspense because PayrollFormPageInner
+// calls useSearchParams(), which requires a Suspense boundary above it.
+// ---------------------------------------------------------------------------
+
+export default function PayrollFormPage() {
+  return (
+    <Suspense fallback={null}>
+      <PayrollFormPageInner />
+    </Suspense>
   );
 }
