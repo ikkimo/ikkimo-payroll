@@ -37,6 +37,7 @@ const SETTINGS_SELECT = [
   "lateness_base_minutes",
   "lateness_increment_idr",
   "lateness_increment_minutes",
+  "attendance_reward_idr",
   "created_at",
   "updated_at",
 ].join(", ");
@@ -318,6 +319,10 @@ export default function SettingsPage() {
           31,
         ),
         hours_per_day: clamp(Math.trunc(row.hours_per_day), 1, 24),
+        attendance_reward_idr: Math.max(
+          0,
+          Math.trunc(row.attendance_reward_idr ?? 100000),
+        ),
       };
       const res = await settingsTable
         .upsert(nextRow as unknown as Record<string, unknown>, {
@@ -813,6 +818,26 @@ export default function SettingsPage() {
                     (row.lateness_base_deduction_idr ?? 25000) +
                       (row.lateness_increment_idr ?? 10000),
                   )}
+                </p>
+              </Card>
+
+              <Card>
+                <SectionLabel>Attendance reward</SectionLabel>
+                <FieldRows>
+                  <FieldRow label="Reward amount (IDR)">
+                    <NumIn
+                      value={row.attendance_reward_idr ?? 100000}
+                      step={10000}
+                      min={0}
+                      disabled={!editing}
+                      onChange={(v) => updateField("attendance_reward_idr", v)}
+                    />
+                  </FieldRow>
+                </FieldRows>
+                <p className="mt-3 text-xs text-[var(--ikkimo-text-muted,#888)]">
+                  Paid in full only when an employee has zero excused and zero
+                  unexcused absences for the period. Lateness and overtime do
+                  not affect eligibility.
                 </p>
               </Card>
 
