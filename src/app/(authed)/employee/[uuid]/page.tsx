@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { verifyCurrentUserPassword } from "@/lib/auth";
 import { formatIDR } from "@/lib/formatters";
 import type { BasicEmployeeRow } from "@/components/employees/types";
 import type { PayrollSettingsRow } from "@/components/settings/types";
@@ -226,19 +227,9 @@ export default function EmployeePage() {
   async function verifyPassword(): Promise<boolean> {
     setConfirmError(null);
 
-    const pwd = confirmPassword;
-    if (!pwd) {
-      setConfirmError("Enter your password to continue.");
-      return false;
-    }
-
-    const { error: authErr } = await supabase.auth.signInWithPassword({
-      email,
-      password: pwd,
-    });
-
-    if (authErr) {
-      setConfirmError("Password is incorrect.");
+    const result = await verifyCurrentUserPassword(confirmPassword);
+    if (!result.ok) {
+      setConfirmError(result.error);
       return false;
     }
 
