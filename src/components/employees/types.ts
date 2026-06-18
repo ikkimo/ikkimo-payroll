@@ -1,4 +1,4 @@
-export type ThrReligion = "balinese" | "christian" | "muslim";
+export type ThrReligion = "hindu" | "christian" | "muslim";
 
 export type BasicEmployeeRow = {
   uuid: string;
