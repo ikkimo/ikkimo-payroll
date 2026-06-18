@@ -29,9 +29,9 @@ const SETTINGS_SELECT = [
   "overtime2_multiplier",
   "overtime3_multiplier",
   "thr",
-  "thr_muslim_date",
+  "thr_hindu_date",
   "thr_christian_date",
-  "thr_balinese_date",
+  "thr_muslim_date",
   "lateness_base_deduction_idr",
   "lateness_base_minutes",
   "lateness_increment_idr",
@@ -872,11 +872,11 @@ export default function SettingsPage() {
                       onChange={(v) => updateField("thr_christian_date", v)}
                     />
                   </FieldRow>
-                  <FieldRow label="Balinese">
+                  <FieldRow label="Hindu">
                     <DateIn
-                      value={row.thr_balinese_date ?? null}
+                      value={row.thr_hindu_date ?? null}
                       disabled={!editing}
-                      onChange={(v) => updateField("thr_balinese_date", v)}
+                      onChange={(v) => updateField("thr_hindu_date", v)}
                     />
                   </FieldRow>
                   <FieldRow label="THR multiplier">

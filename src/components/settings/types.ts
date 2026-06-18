@@ -17,9 +17,9 @@ export type PayrollSettingsRow = {
 
   thr: number;
 
-  thr_muslim_date: string | null;
+  thr_hindu_date: string | null;
   thr_christian_date: string | null;
-  thr_balinese_date: string | null;
+  thr_muslim_date: string | null;
 
   payroll_end_date: number;
 
