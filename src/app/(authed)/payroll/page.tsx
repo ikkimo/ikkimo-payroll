@@ -712,7 +712,7 @@ export default function PayrollFormPage() {
       const entryRes = await supabase
         .from("payroll_entries")
         .select(
-          "employee_uuid, full_days_worked, excused_full_days, excused_half_days, unexcused_full_days, unexcused_half_days, late_minutes_count, loan_repayment_idr, new_loan_idr, salary_to_pay",
+          "employee_uuid, full_days_worked, excused_full_days, excused_half_days, unexcused_full_days, unexcused_half_days, late_minutes_count, loan_repayment_idr, new_loan_idr, overtime_hours_1, overtime_hours_2, overtime_hours_3, salary_to_pay",
         )
         .eq("period_id", p.id);
 
@@ -729,9 +729,9 @@ export default function PayrollFormPage() {
             late_minutes_count: entry.late_minutes_count ?? 0,
             loan_repayment: entry.loan_repayment_idr ?? 0,
             new_loan: entry.new_loan_idr ?? 0,
-            overtime_hours_1: 0,
-            overtime_hours_2: 0,
-            overtime_hours_3: 0,
+            overtime_hours_1: entry.overtime_hours_1 ?? 0,
+            overtime_hours_2: entry.overtime_hours_2 ?? 0,
+            overtime_hours_3: entry.overtime_hours_3 ?? 0,
           };
         }
       }
@@ -821,6 +821,9 @@ export default function PayrollFormPage() {
         late_minutes_count: inp.late_minutes_count,
         loan_repayment_idr: inp.loan_repayment,
         new_loan_idr: inp.new_loan,
+        overtime_hours_1: inp.overtime_hours_1,
+        overtime_hours_2: inp.overtime_hours_2,
+        overtime_hours_3: inp.overtime_hours_3,
         salary_to_pay: row?.net_pay ?? null,
       };
     });
@@ -876,6 +879,9 @@ export default function PayrollFormPage() {
         late_minutes_count: inp.late_minutes_count,
         loan_repayment_idr: inp.loan_repayment,
         new_loan_idr: inp.new_loan,
+        overtime_hours_1: inp.overtime_hours_1,
+        overtime_hours_2: inp.overtime_hours_2,
+        overtime_hours_3: inp.overtime_hours_3,
         salary_to_pay: row?.net_pay ?? null,
       };
     });
