@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { formatIDR } from "@/lib/formatters";
 import type { BasicEmployeeRow } from "@/components/employees/types";
 import type { PayrollSettingsRow } from "@/components/settings/types";
+import { useSearchParams } from "next/navigation";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -592,6 +593,7 @@ export default function PayrollFormPage() {
   const [periodReady, setPeriodReady] = useState(false);
 
   const isSubmitted = sessionStatus === "submitted";
+  const searchParams = useSearchParams();
 
   // ---------------------------------------------------------------------------
   // Initial load
@@ -644,7 +646,19 @@ export default function PayrollFormPage() {
       setInputs(init);
 
       const endDay = loadedSettings?.payroll_end_date ?? 25;
-      const { year, month } = getDefaultPeriod(endDay);
+
+      const yearParam = Number(searchParams.get("year"));
+      const monthParam = Number(searchParams.get("month"));
+      const hasValidParams =
+        Number.isInteger(yearParam) &&
+        Number.isInteger(monthParam) &&
+        monthParam >= 1 &&
+        monthParam <= 12;
+
+      const { year, month } = hasValidParams
+        ? { year: yearParam, month: monthParam }
+        : getDefaultPeriod(endDay);
+
       setSelectedYear(year);
       setSelectedMonth(month);
       setPeriodReady(true);
