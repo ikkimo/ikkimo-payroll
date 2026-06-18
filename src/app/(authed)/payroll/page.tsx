@@ -53,6 +53,8 @@ type EmployeeInput = {
   overtime_hours_1: number;
   overtime_hours_2: number;
   overtime_hours_3: number;
+  other_adjustment_idr: number;
+  other_adjustment_note: string;
 };
 
 type PayrollRow = {
@@ -73,6 +75,7 @@ type PayrollRow = {
   loan_repayment: number;
   new_loan: number;
   projected_loan_balance: number;
+  other_adjustment: number;
   bpjs_employee_jht: number;
   bpjs_employee_jp: number;
   bpjs_company_jht: number;
@@ -97,6 +100,8 @@ const blankInput = (stdDays = 21): EmployeeInput => ({
   overtime_hours_1: 0,
   overtime_hours_2: 0,
   overtime_hours_3: 0,
+  other_adjustment_idr: 0,
+  other_adjustment_note: "",
 });
 
 // ---------------------------------------------------------------------------
@@ -225,7 +230,9 @@ function computeRow(
   const loanRepayment = safe(input.loan_repayment);
   const newLoan = safe(input.new_loan);
   const projectedLoanBalance = loanBalance - loanRepayment + newLoan;
-  const netPay = gross - bpjsEmpJHT - bpjsEmpJP - loanRepayment + newLoan;
+  const otherAdjustment = safe(input.other_adjustment_idr);
+  const netPay =
+    gross - bpjsEmpJHT - bpjsEmpJP - loanRepayment + newLoan + otherAdjustment;
   const companyBpjsTotal =
     bpjsCoJHT + bpjsCoJKM + bpjsCoJKK + bpjsCoJP + bpjsEmpJHT + bpjsEmpJP;
 
@@ -247,6 +254,7 @@ function computeRow(
     loan_repayment: loanRepayment,
     new_loan: newLoan,
     projected_loan_balance: projectedLoanBalance,
+    other_adjustment: otherAdjustment,
     bpjs_employee_jht: bpjsEmpJHT,
     bpjs_employee_jp: bpjsEmpJP,
     bpjs_company_jht: bpjsCoJHT,
@@ -271,6 +279,7 @@ function sumRows(rows: PayrollRow[]) {
     attendance_reward: sum("attendance_reward"),
     gross: sum("gross"),
     loan_repayment: sum("loan_repayment"),
+    other_adjustment: sum("other_adjustment"),
     bpjs_employee_jht: sum("bpjs_employee_jht"),
     bpjs_employee_jp: sum("bpjs_employee_jp"),
     bpjs_company_jht: sum("bpjs_company_jht"),
@@ -475,9 +484,21 @@ function BreakdownCard({ row }: { row: PayrollRow }) {
                   red
                 />
               )}
+              {row.other_adjustment !== 0 && (
+                <Line
+                  label="Other adjustment"
+                  value={
+                    row.other_adjustment > 0
+                      ? `+ ${formatIDR(row.other_adjustment)}`
+                      : `− ${formatIDR(Math.abs(row.other_adjustment))}`
+                  }
+                  red={row.other_adjustment < 0}
+                />
+              )}
               {row.unexcused_deduction === 0 &&
                 row.lateness_deduction === 0 &&
-                row.loan_repayment === 0 && (
+                row.loan_repayment === 0 &&
+                row.other_adjustment === 0 && (
                   <div className="text-[var(--ikkimo-text-muted,#aaa)]">
                     No deductions
                   </div>
@@ -581,7 +602,7 @@ function PayrollFormPageInner() {
   const [inputs, setInputs] = useState<Record<string, EmployeeInput>>({});
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [view, setView] = useState<
-    "attendance" | "loans" | "overtime" | "summary" | "bpjs"
+    "attendance" | "loans" | "overtime" | "other" | "summary" | "bpjs"
   >("attendance");
 
   const [selectedYear, setSelectedYear] = useState<number>(
@@ -712,7 +733,7 @@ function PayrollFormPageInner() {
       const entryRes = await supabase
         .from("payroll_entries")
         .select(
-          "employee_uuid, full_days_worked, excused_full_days, excused_half_days, unexcused_full_days, unexcused_half_days, late_minutes_count, loan_repayment_idr, new_loan_idr, overtime_hours_1, overtime_hours_2, overtime_hours_3, salary_to_pay",
+          "employee_uuid, full_days_worked, excused_full_days, excused_half_days, unexcused_full_days, unexcused_half_days, late_minutes_count, loan_repayment_idr, new_loan_idr, overtime_hours_1, overtime_hours_2, overtime_hours_3, other_adjustment_idr, other_adjustment_note, salary_to_pay",
         )
         .eq("period_id", p.id);
 
@@ -732,6 +753,8 @@ function PayrollFormPageInner() {
             overtime_hours_1: entry.overtime_hours_1 ?? 0,
             overtime_hours_2: entry.overtime_hours_2 ?? 0,
             overtime_hours_3: entry.overtime_hours_3 ?? 0,
+            other_adjustment_idr: entry.other_adjustment_idr ?? 0,
+            other_adjustment_note: entry.other_adjustment_note ?? "",
           };
         }
       }
@@ -761,10 +784,14 @@ function PayrollFormPageInner() {
 
   const totals = useMemo(() => sumRows(payrollRows), [payrollRows]);
 
-  function updateInput(uuid: string, key: keyof EmployeeInput, value: number) {
+  function updateInput(
+    uuid: string,
+    key: keyof EmployeeInput,
+    value: number | string,
+  ) {
     setInputs((prev) => {
       const current = prev[uuid] ?? blankInput(period?.working_days ?? stdDays);
-      const updated = { ...current, [key]: value };
+      const updated = { ...current, [key]: value } as EmployeeInput;
 
       if (
         key === "excused_full_days" ||
@@ -824,6 +851,8 @@ function PayrollFormPageInner() {
         overtime_hours_1: inp.overtime_hours_1,
         overtime_hours_2: inp.overtime_hours_2,
         overtime_hours_3: inp.overtime_hours_3,
+        other_adjustment_idr: inp.other_adjustment_idr,
+        other_adjustment_note: inp.other_adjustment_note || null,
         salary_to_pay: row?.net_pay ?? null,
       };
     });
@@ -882,6 +911,8 @@ function PayrollFormPageInner() {
         overtime_hours_1: inp.overtime_hours_1,
         overtime_hours_2: inp.overtime_hours_2,
         overtime_hours_3: inp.overtime_hours_3,
+        other_adjustment_idr: inp.other_adjustment_idr,
+        other_adjustment_note: inp.other_adjustment_note || null,
         salary_to_pay: row?.net_pay ?? null,
       };
     });
@@ -923,6 +954,7 @@ function PayrollFormPageInner() {
     attendance: "Attendance",
     loans: "Loans",
     overtime: "Overtime",
+    other: "Other",
     summary: "Pay summary",
     bpjs: "BPJS",
   };
@@ -1086,7 +1118,7 @@ function PayrollFormPageInner() {
         {/* Tab switcher */}
         <div className="mt-4 flex flex-wrap gap-1 border-t border-[var(--ikkimo-border)] pt-4">
           {(
-            ["attendance", "loans", "overtime", "summary", "bpjs"] as const
+            ["attendance", "loans", "overtime", "other", "summary", "bpjs"] as const
           ).map((v) => (
             <button
               key={v}
@@ -1375,6 +1407,71 @@ function PayrollFormPageInner() {
                                 updateInput(emp.uuid, "overtime_hours_3", v)
                               }
                               disabled={isSubmitted}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ── OTHER ── */}
+          {view === "other" && (
+            <div className="rounded-2xl border border-[var(--ikkimo-border)] bg-white">
+              <div className="border-b border-[var(--ikkimo-border)] px-5 py-3">
+                <div className="text-sm font-semibold">Other adjustment</div>
+                <div className="mt-0.5 text-xs text-[var(--ikkimo-text-muted,#666)]">
+                  One-off addition or deduction, applied after everything else. Use a
+                  negative amount to deduct.
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="border-b border-[var(--ikkimo-border)] bg-[var(--ikkimo-surface,#fafafa)]">
+                    <tr>
+                      <Th>Employee</Th>
+                      <Th right>Amount (IDR)</Th>
+                      <Th>Note</Th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--ikkimo-border)]">
+                    {employees.map((emp) => {
+                      const inp = inputs[emp.uuid] ?? blankInput(stdDays);
+                      return (
+                        <tr
+                          key={emp.uuid}
+                          className="hover:bg-[var(--ikkimo-surface,#fafafa)]"
+                        >
+                          <EmpCell emp={emp} />
+                          <td className="px-3 py-2 text-right">
+                            <NumInput
+                              value={inp.other_adjustment_idr}
+                              onChange={(v) =>
+                                updateInput(emp.uuid, "other_adjustment_idr", v)
+                              }
+                              step={10000}
+                              min={-999999999}
+                              wide
+                              disabled={isSubmitted}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              type="text"
+                              value={inp.other_adjustment_note}
+                              onChange={(e) =>
+                                updateInput(
+                                  emp.uuid,
+                                  "other_adjustment_note",
+                                  e.target.value,
+                                )
+                              }
+                              disabled={isSubmitted}
+                              placeholder="e.g. bonus, correction, fine"
+                              className="w-full rounded-md border border-[var(--ikkimo-border)] bg-white px-2 py-1 text-sm outline-none focus:border-[var(--ikkimo-brand)] disabled:cursor-not-allowed disabled:bg-[var(--ikkimo-surface,#f5f5f5)] disabled:opacity-60"
                             />
                           </td>
                         </tr>
