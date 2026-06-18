@@ -2,11 +2,12 @@
 
 export const dynamic = "force-dynamic";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, Suspense, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { formatIDR } from "@/lib/formatters";
 import type { BasicEmployeeRow } from "@/components/employees/types";
 import type { PayrollSettingsRow } from "@/components/settings/types";
+import { useSearchParams } from "next/navigation";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -564,7 +565,7 @@ function Line({
 // Page
 // ---------------------------------------------------------------------------
 
-export default function PayrollFormPage() {
+function PayrollFormPageInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -592,6 +593,7 @@ export default function PayrollFormPage() {
   const [periodReady, setPeriodReady] = useState(false);
 
   const isSubmitted = sessionStatus === "submitted";
+  const searchParams = useSearchParams();
 
   // ---------------------------------------------------------------------------
   // Initial load
@@ -644,7 +646,19 @@ export default function PayrollFormPage() {
       setInputs(init);
 
       const endDay = loadedSettings?.payroll_end_date ?? 25;
-      const { year, month } = getDefaultPeriod(endDay);
+
+      const yearParam = Number(searchParams.get("year"));
+      const monthParam = Number(searchParams.get("month"));
+      const hasValidParams =
+        Number.isInteger(yearParam) &&
+        Number.isInteger(monthParam) &&
+        monthParam >= 1 &&
+        monthParam <= 12;
+
+      const { year, month } = hasValidParams
+        ? { year: yearParam, month: monthParam }
+        : getDefaultPeriod(endDay);
+
       setSelectedYear(year);
       setSelectedMonth(month);
       setPeriodReady(true);
@@ -698,7 +712,7 @@ export default function PayrollFormPage() {
       const entryRes = await supabase
         .from("payroll_entries")
         .select(
-          "employee_uuid, full_days_worked, excused_full_days, excused_half_days, unexcused_full_days, unexcused_half_days, late_minutes_count, loan_repayment_idr, new_loan_idr, salary_to_pay",
+          "employee_uuid, full_days_worked, excused_full_days, excused_half_days, unexcused_full_days, unexcused_half_days, late_minutes_count, loan_repayment_idr, new_loan_idr, overtime_hours_1, overtime_hours_2, overtime_hours_3, salary_to_pay",
         )
         .eq("period_id", p.id);
 
@@ -715,9 +729,9 @@ export default function PayrollFormPage() {
             late_minutes_count: entry.late_minutes_count ?? 0,
             loan_repayment: entry.loan_repayment_idr ?? 0,
             new_loan: entry.new_loan_idr ?? 0,
-            overtime_hours_1: 0,
-            overtime_hours_2: 0,
-            overtime_hours_3: 0,
+            overtime_hours_1: entry.overtime_hours_1 ?? 0,
+            overtime_hours_2: entry.overtime_hours_2 ?? 0,
+            overtime_hours_3: entry.overtime_hours_3 ?? 0,
           };
         }
       }
@@ -807,6 +821,9 @@ export default function PayrollFormPage() {
         late_minutes_count: inp.late_minutes_count,
         loan_repayment_idr: inp.loan_repayment,
         new_loan_idr: inp.new_loan,
+        overtime_hours_1: inp.overtime_hours_1,
+        overtime_hours_2: inp.overtime_hours_2,
+        overtime_hours_3: inp.overtime_hours_3,
         salary_to_pay: row?.net_pay ?? null,
       };
     });
@@ -862,6 +879,9 @@ export default function PayrollFormPage() {
         late_minutes_count: inp.late_minutes_count,
         loan_repayment_idr: inp.loan_repayment,
         new_loan_idr: inp.new_loan,
+        overtime_hours_1: inp.overtime_hours_1,
+        overtime_hours_2: inp.overtime_hours_2,
+        overtime_hours_3: inp.overtime_hours_3,
         salary_to_pay: row?.net_pay ?? null,
       };
     });
@@ -1549,5 +1569,18 @@ export default function PayrollFormPage() {
         </>
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Default export: wraps the page in Suspense because PayrollFormPageInner
+// calls useSearchParams(), which requires a Suspense boundary above it.
+// ---------------------------------------------------------------------------
+
+export default function PayrollFormPage() {
+  return (
+    <Suspense fallback={null}>
+      <PayrollFormPageInner />
+    </Suspense>
   );
 }
