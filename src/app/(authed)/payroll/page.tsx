@@ -592,6 +592,10 @@ function PayrollFormPageInner() {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
 
   const [period, setPeriod] = useState<PayrollPeriod | null>(null);
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>("none");
@@ -947,6 +951,66 @@ function PayrollFormPageInner() {
   }
 
   // ---------------------------------------------------------------------------
+  // Reset session
+  // ---------------------------------------------------------------------------
+  async function verifyResetPassword(): Promise<boolean> {
+    setResetError(null);
+    if (!resetPassword) {
+      setResetError("Enter your password to continue.");
+      return false;
+    }
+    const { data: userData } = await supabase.auth.getUser();
+    const currentEmail = userData?.user?.email;
+    if (!currentEmail) {
+      setResetError("Could not verify current session.");
+      return false;
+    }
+    const { error: authErr } = await supabase.auth.signInWithPassword({
+      email: currentEmail,
+      password: resetPassword,
+    });
+    if (authErr) {
+      setResetError("Password is incorrect.");
+      return false;
+    }
+    setResetPassword("");
+    return true;
+  }
+
+  async function handleResetSession() {
+    if (!period) return;
+    setResetting(true);
+
+    const { error: delErr } = await supabase
+      .from("payroll_entries")
+      .delete()
+      .eq("period_id", period.id);
+
+    if (delErr) {
+      setResetError(`Reset failed: ${delErr.message}`);
+      setResetting(false);
+      return;
+    }
+
+    const periodDays = period.working_days ?? stdDays;
+    const blanked: Record<string, EmployeeInput> = {};
+    for (const emp of employees) {
+      blanked[emp.uuid] = blankInput(periodDays);
+    }
+    setInputs(blanked);
+    setShowResetModal(false);
+    setSaveMsg("Session reset");
+    setTimeout(() => setSaveMsg(null), 3000);
+    setResetting(false);
+  }
+
+  async function confirmReset() {
+    const ok = await verifyResetPassword();
+    if (!ok) return;
+    await handleResetSession();
+  }
+
+  // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
 
@@ -991,6 +1055,81 @@ function PayrollFormPageInner() {
                 className="rounded-xl bg-[var(--ikkimo-brand)] px-4 py-2 text-sm font-semibold text-white"
               >
                 Confirm &amp; submit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset session confirmation modal */}
+      {showResetModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <button
+            className="absolute inset-0 bg-black/30"
+            aria-label="Close"
+            onClick={() => {
+              setShowResetModal(false);
+              setResetPassword("");
+              setResetError(null);
+            }}
+          />
+          <div className="relative w-full max-w-md rounded-2xl border border-[var(--ikkimo-border)] bg-white p-6 shadow-lg">
+            <div className="text-lg font-semibold text-red-600">
+              Reset session?
+            </div>
+            <div className="mt-2 text-sm text-[var(--ikkimo-text-muted,#666)]">
+              This will permanently delete all saved attendance, loan,
+              overtime, and adjustment data for every employee in{" "}
+              {monthName(selectedMonth)} {selectedYear}. The period itself
+              (working days, red days) is not affected. This cannot be
+              undone.
+            </div>
+
+            <div className="mt-4 rounded-xl border border-[var(--ikkimo-border)] p-4">
+              <div className="text-xs font-semibold">
+                Confirm with your password
+              </div>
+              <input
+                type="password"
+                value={resetPassword}
+                onChange={(e) => {
+                  setResetPassword(e.target.value);
+                  setResetError(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") confirmReset();
+                }}
+                placeholder="Password"
+                autoComplete="current-password"
+                className="mt-2 h-9 w-full rounded-xl border border-[var(--ikkimo-border)] px-3 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
+              />
+            </div>
+
+            {resetError && (
+              <p className="mt-2 text-xs text-red-600">{resetError}</p>
+            )}
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowResetModal(false);
+                  setResetPassword("");
+                  setResetError(null);
+                }}
+                className="rounded-xl border border-[var(--ikkimo-border)] px-4 py-2 text-sm hover:border-[var(--ikkimo-brand)]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmReset}
+                disabled={resetting}
+                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                {resetting ? "Resetting…" : "Confirm reset"}
               </button>
             </div>
           </div>
@@ -1079,6 +1218,24 @@ function PayrollFormPageInner() {
                   </span>
                 ) : (
                   <>
+                    {/* Reset session button */}
+                    <button
+                      onClick={() => {
+                        setShowResetModal(true);
+                        setResetPassword("");
+                        setResetError(null);
+                      }}
+                      disabled={saving || resetting || !period}
+                      title={
+                        !period
+                          ? "No payroll period configured for this month"
+                          : undefined
+                      }
+                      className="rounded-xl border border-red-200 px-4 py-1.5 text-sm text-red-600 hover:border-red-400 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Reset session
+                    </button>
+
                     {/* Save button */}
                     <button
                       onClick={handleSave}
