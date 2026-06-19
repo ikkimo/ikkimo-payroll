@@ -69,6 +69,7 @@ type PayrollRow = {
   meal_allowance: number;
   meal_eligible_days: number;
   attendance_reward: number;
+  overtime_pay: number;
   unexcused_deduction: number;
   lateness_deduction: number;
   gross: number;
@@ -167,8 +168,13 @@ function computeRow(
   settings: PayrollSettingsRow,
   periodWorkingDays: number,
 ): PayrollRow {
-  const stdDays =
-    periodWorkingDays || safe(settings.standard_working_days) || 21;
+  // periodWorkingDays (the period's specific working_days override) is
+  // deliberately NOT used below: the unexcused-absence deduction and
+  // overtime calculations always use settings.standard_working_days,
+  // regardless of any per-period override. Only full_days_worked (computed
+  // outside this function) and, by extension, attendance-reward
+  // eligibility follow the period-specific working days.
+  const stdDays = safe(settings.standard_working_days) || 21;
   const basic = safe(emp.basic);
   const positionAllowance = safe(emp.positions?.allowance_idr);
   const skillGradeIncrease =
@@ -200,6 +206,24 @@ function computeRow(
     ? safe(settings.attendance_reward_idr) || 100000
     : 0;
 
+  // Overtime — three independent categories (e.g. weekday / weekend /
+  // holiday), each paid at its own multiplier on the same base hourly rate.
+  // Hourly rate derives from main salary (basic + position allowance +
+  // skill grade increase), spread over settings.standard_working_days and
+  // settings.hours_per_day — always the Settings value, never the period's
+  // working_days override.
+  const hoursPerDay = safe(settings.hours_per_day) || 8;
+  const hourlyRate = mainSalary / (stdDays * hoursPerDay);
+  const overtimeMultiplier1 = safe(settings.overtime1_multiplier) || 1.5;
+  const overtimeMultiplier2 = safe(settings.overtime2_multiplier) || 2.0;
+  const overtimeMultiplier3 = safe(settings.overtime3_multiplier) || 3.0;
+  const overtimePay = Math.round(
+    hourlyRate *
+      (safe(input.overtime_hours_1) * overtimeMultiplier1 +
+        safe(input.overtime_hours_2) * overtimeMultiplier2 +
+        safe(input.overtime_hours_3) * overtimeMultiplier3),
+  );
+
   // const absentDays = safe(input.excused_full_days) + safe(input.unexcused_full_days) + safe(input.excused_half_days) + safe(input.unexcused_half_days);
   const halfDaysCount =
     safe(input.excused_half_days) + safe(input.unexcused_half_days);
@@ -217,7 +241,8 @@ function computeRow(
     mainSalary +
     housingAllowance +
     mealAllowance +
-    attendanceReward -
+    attendanceReward +
+    overtimePay -
     unexcusedDeduction -
     latenessDeduction; //! removed seniorityIncrease for now
 
@@ -255,6 +280,7 @@ function computeRow(
     unexcused_deduction: unexcusedDeduction,
     lateness_deduction: latenessDeduction,
     attendance_reward: attendanceReward,
+    overtime_pay: overtimePay,
     gross,
     loan_balance: loanBalance,
     loan_repayment: loanRepayment,
@@ -283,6 +309,7 @@ function sumRows(rows: PayrollRow[]) {
     unexcused_deduction: sum("unexcused_deduction"),
     lateness_deduction: sum("lateness_deduction"),
     attendance_reward: sum("attendance_reward"),
+    overtime_pay: sum("overtime_pay"),
     gross: sum("gross"),
     loan_repayment: sum("loan_repayment"),
     other_adjustment: sum("other_adjustment"),
@@ -449,6 +476,12 @@ function BreakdownCard({ row }: { row: PayrollRow }) {
                 <Line
                   label="Attendance reward"
                   value={formatIDR(row.attendance_reward)}
+                />
+              )}
+              {row.overtime_pay > 0 && (
+                <Line
+                  label="Overtime pay"
+                  value={formatIDR(row.overtime_pay)}
                 />
               )}
               <div className="mt-1 border-t border-[var(--ikkimo-border)] pt-1">
@@ -1516,7 +1549,8 @@ function PayrollFormPageInner() {
               <div className="border-b border-[var(--ikkimo-border)] px-5 py-3">
                 <div className="text-sm font-semibold">Overtime</div>
                 <div className="mt-0.5 text-xs text-[var(--ikkimo-text-muted,#666)]">
-                  Overtime rules to be confirmed — inputs tracked here for now.
+                  Hours are paid at the multipliers set in Settings, based on
+                  main salary ÷ standard working days ÷ hours per day.
                 </div>
               </div>
               <div className="overflow-x-auto">
