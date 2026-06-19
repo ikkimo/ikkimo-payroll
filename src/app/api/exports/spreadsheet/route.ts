@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
 
   const filename = `payroll_${period.year}_${String(period.month).padStart(2, "0")}.xlsx`;
 
-  return new NextResponse(buffer as Buffer, {
+  return new NextResponse(new Uint8Array(buffer), {
     status: 200,
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
