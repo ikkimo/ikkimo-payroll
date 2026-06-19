@@ -140,14 +140,14 @@ export async function POST(req: NextRequest) {
     });
 
     const codeSafe = safeFileSegment(emp.employee_code || emp.uuid);
-    zip.file(`payslip_${codeSafe}.xlsx`, xlsxBuffer as Buffer);
+    zip.file(`payslip_${codeSafe}.xlsx`, Buffer.from(xlsxBuffer));
     zip.file(`payslip_${codeSafe}.pdf`, pdfBuffer);
   }
 
   const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
   const filename = `payslips_${period.year}_${String(period.month).padStart(2, "0")}.zip`;
 
-  return new NextResponse(zipBuffer, {
+  return new NextResponse(new Uint8Array(zipBuffer), {
     status: 200,
     headers: {
       "Content-Type": "application/zip",
