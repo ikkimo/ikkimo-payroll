@@ -1,6 +1,9 @@
 // ---------------------------------------------------------------------------
 // A5 payslip PDF, built with @react-pdf/renderer.
-// Reads only from the stored payroll_entries breakdown — no calculation.
+//
+// True A5 page size (148mm x 210mm) so this is ready to print directly.
+// Mirrors the same field set/order as payslipExcel.ts so the two documents
+// always agree.
 // ---------------------------------------------------------------------------
 
 import React from "react";
@@ -11,14 +14,20 @@ import {
   View,
   Image,
   StyleSheet,
+  Font,
   renderToBuffer,
 } from "@react-pdf/renderer";
-import type { ExportRow } from "./types";
-import { monthName, monthNameId } from "./types";
+import type { PayrollRow } from "./payrollRow";
+import { monthName, monthNameId } from "./payrollRow";
 import type { CompanyInfo } from "./payslipExcel";
 
-const A5_WIDTH_PT = 419.53;
-const A5_HEIGHT_PT = 595.28;
+// @react-pdf/renderer defaults to Helvetica which has no IDR-friendly
+// thousand-separator quirks, so we keep the default font rather than
+// registering Arial (avoids bundling a font file). Visually near-identical
+// for this use case.
+
+const A5_WIDTH_PT = 419.53; // 148mm
+const A5_HEIGHT_PT = 595.28; // 210mm
 
 const styles = StyleSheet.create({
   page: {
@@ -61,8 +70,17 @@ const styles = StyleSheet.create({
   infoValue: { fontSize: 9.5, fontWeight: 700, marginTop: 1 },
   columns: { flexDirection: "row", flex: 1 },
   column: { width: "50%", paddingRight: 6 },
-  sectionTitle: { fontSize: 9, fontWeight: 700, marginBottom: 5, textTransform: "uppercase" },
-  lineRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 1.5 },
+  sectionTitle: {
+    fontSize: 9,
+    fontWeight: 700,
+    marginBottom: 5,
+    textTransform: "uppercase",
+  },
+  lineRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 1.5,
+  },
   lineLabel: { fontSize: 8.5, color: "#444" },
   lineValue: { fontSize: 8.5 },
   totalRow: {
@@ -93,7 +111,11 @@ const styles = StyleSheet.create({
     fontSize: 7.5,
     color: "#666",
   },
-  signatureRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 16 },
+  signatureRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 16,
+  },
   signatureCol: { width: "45%" },
   signatureLabel: { fontSize: 8, fontWeight: 700, marginBottom: 24 },
   signatureLine: { fontSize: 8, marginBottom: 2 },
@@ -102,6 +124,7 @@ const styles = StyleSheet.create({
     marginTop: "auto",
     borderTopWidth: 0.5,
     borderTopColor: "#ccc",
+    borderTopStyle: "dashed" as never,
     paddingTop: 6,
     fontSize: 6.5,
     color: "#999",
@@ -110,50 +133,64 @@ const styles = StyleSheet.create({
 });
 
 function fmtIDR(n: number): string {
-  return Math.round(n || 0).toLocaleString("id-ID");
+  return Math.round(n).toLocaleString("id-ID");
 }
 
 export type PayslipPdfProps = {
-  row: ExportRow;
+  row: PayrollRow;
   company: CompanyInfo;
   year: number;
   month: number;
   payslipDate: Date;
-  logoDataUri?: string | null;
+  logoDataUri?: string | null; // data:image/png;base64,... ready for <Image src>
 };
 
-export function PayslipDocument({ row, company, year, month, payslipDate, logoDataUri }: PayslipPdfProps) {
+export function PayslipDocument({
+  row,
+  company,
+  year,
+  month,
+  payslipDate,
+  logoDataUri,
+}: PayslipPdfProps) {
   const emp = row.employee;
-  const entry = row.entry;
   const empName = emp.preferred_name ?? emp.employee_name;
 
   const earnings: Array<[string, number]> = [
-    ["Gaji pokok & tunjangan / Basic + allowances", entry.main_salary_idr],
+    ["Gaji pokok / Basic salary", row.basic],
+    ["Tunjangan jabatan / Position allowance", row.position_allowance],
   ];
-  if (entry.housing_allowance_idr > 0) earnings.push(["Tunjangan perumahan / Housing", entry.housing_allowance_idr]);
-  if (entry.meal_allowance_idr > 0) earnings.push([`Uang makan / Meal (${entry.meal_eligible_days}d)`, entry.meal_allowance_idr]);
-  if (entry.overtime_pay_idr > 0) earnings.push(["Lembur / Overtime", entry.overtime_pay_idr]);
-  if (entry.attendance_reward_idr > 0) earnings.push(["Bonus kehadiran / Attendance reward", entry.attendance_reward_idr]);
-  if (entry.other_adjustment_idr > 0) earnings.push(["Lainnya / Other adjustment", entry.other_adjustment_idr]);
+  if (row.skill_grade_increase > 0)
+    earnings.push(["Tunjangan keahlian / Skill grade", row.skill_grade_increase]);
+  if (row.housing_allowance > 0)
+    earnings.push(["Tunjangan perumahan / Housing", row.housing_allowance]);
+  if (row.meal_allowance > 0)
+    earnings.push([`Uang makan / Meal (${row.meal_eligible_days}d)`, row.meal_allowance]);
+  if (row.overtime_pay > 0) earnings.push(["Lembur / Overtime", row.overtime_pay]);
+  if (row.attendance_reward > 0)
+    earnings.push(["Bonus kehadiran / Attendance reward", row.attendance_reward]);
+  if (row.other_adjustment > 0)
+    earnings.push(["Lainnya / Other adjustment", row.other_adjustment]);
 
   const deductions: Array<[string, number | null]> = [
-    ["Tanpa keterangan / Unexcused absence", entry.unexcused_deduction_idr || null],
-    ["Keterlambatan / Lateness", entry.lateness_deduction_idr || null],
+    ["Tanpa keterangan / Unexcused absence", row.unexcused_deduction || null],
+    ["Keterlambatan / Lateness", row.lateness_deduction || null],
     ["Pajak penghasilan (PPh21) / Income tax", null],
     ["BPJS Kesehatan / Health insurance", null],
-    ["BPJS JHT", entry.bpjs_employee_jht_idr || null],
-    ["BPJS JP", entry.bpjs_employee_jp_idr || null],
-    ["Cicilan pinjaman / Loan repayment", entry.loan_repayment_idr || null],
+    ["BPJS JHT", row.bpjs_employee_jht || null],
+    ["BPJS JP", row.bpjs_employee_jp || null],
+    ["Cicilan pinjaman / Loan repayment", row.loan_repayment || null],
   ];
-  if (entry.other_adjustment_idr < 0) deductions.push(["Lainnya / Other adjustment", Math.abs(entry.other_adjustment_idr)]);
+  if (row.other_adjustment < 0)
+    deductions.push(["Lainnya / Other adjustment", Math.abs(row.other_adjustment)]);
 
   const totalDeductions =
-    entry.unexcused_deduction_idr +
-    entry.lateness_deduction_idr +
-    entry.bpjs_employee_jht_idr +
-    entry.bpjs_employee_jp_idr +
-    entry.loan_repayment_idr +
-    (entry.other_adjustment_idr < 0 ? Math.abs(entry.other_adjustment_idr) : 0);
+    row.unexcused_deduction +
+    row.lateness_deduction +
+    row.bpjs_employee_jht +
+    row.bpjs_employee_jp +
+    row.loan_repayment +
+    (row.other_adjustment < 0 ? Math.abs(row.other_adjustment) : 0);
 
   return (
     <Document>
@@ -162,7 +199,9 @@ export function PayslipDocument({ row, company, year, month, payslipDate, logoDa
           {logoDataUri ? <Image src={logoDataUri} style={styles.logo} /> : null}
           <View>
             <Text style={styles.companyName}>{company.name}</Text>
-            <Text style={styles.companySubtitle}>Slip gaji karyawan / Employee payslip</Text>
+            <Text style={styles.companySubtitle}>
+              Slip gaji karyawan / Employee payslip
+            </Text>
           </View>
           <View style={styles.badge}>
             <Text style={styles.badgeText}>PAYSLIP</Text>
@@ -176,7 +215,9 @@ export function PayslipDocument({ row, company, year, month, payslipDate, logoDa
           </View>
           <View style={styles.infoCell}>
             <Text style={styles.infoLabel}>Periode / Period</Text>
-            <Text style={styles.infoValue}>{monthNameId(month)} / {monthName(month)} {year}</Text>
+            <Text style={styles.infoValue}>
+              {monthNameId(month)} / {monthName(month)} {year}
+            </Text>
           </View>
           <View style={styles.infoCell}>
             <Text style={styles.infoLabel}>Nº ID / Employee code</Text>
@@ -199,7 +240,7 @@ export function PayslipDocument({ row, company, year, month, payslipDate, logoDa
             ))}
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Kotor / Gross</Text>
-              <Text style={styles.totalValue}>{fmtIDR(entry.gross_idr)}</Text>
+              <Text style={styles.totalValue}>{fmtIDR(row.gross)}</Text>
             </View>
           </View>
 
@@ -208,7 +249,9 @@ export function PayslipDocument({ row, company, year, month, payslipDate, logoDa
             {deductions.map(([label, value]) => (
               <View style={styles.lineRow} key={label}>
                 <Text style={styles.lineLabel}>{label}</Text>
-                <Text style={styles.lineValue}>{value !== null ? fmtIDR(value) : ""}</Text>
+                <Text style={styles.lineValue}>
+                  {value !== null ? fmtIDR(value) : ""}
+                </Text>
               </View>
             ))}
             <View style={styles.totalRow}>
@@ -220,12 +263,16 @@ export function PayslipDocument({ row, company, year, month, payslipDate, logoDa
 
         <View style={styles.netPayBox}>
           <Text style={styles.netPayLabel}>Gaji bersih / Net pay</Text>
-          <Text style={styles.netPayValue}>Rp {fmtIDR(entry.salary_to_pay)}</Text>
+          <Text style={styles.netPayValue}>Rp {fmtIDR(row.net_pay)}</Text>
         </View>
 
         <View style={styles.bankRow}>
-          <Text>{emp.bank ?? "-"} • {emp.bank_account ?? "-"}</Text>
-          <Text>Dibuat / Generated: {payslipDate.toLocaleDateString("en-GB")}</Text>
+          <Text>
+            {emp.bank ?? "-"} • {emp.bank_account ?? "-"}
+          </Text>
+          <Text>
+            Dibuat / Generated: {payslipDate.toLocaleDateString("en-GB")}
+          </Text>
         </View>
 
         <View style={styles.signatureRow}>
@@ -241,12 +288,16 @@ export function PayslipDocument({ row, company, year, month, payslipDate, logoDa
           </View>
         </View>
 
-        <Text style={styles.footer}>Dokumen ini dibuat otomatis / This is a system-generated document</Text>
+        <Text style={styles.footer}>
+          Dokumen ini dibuat otomatis / This is a system-generated document
+        </Text>
       </Page>
     </Document>
   );
 }
 
-export async function renderPayslipPdfBuffer(props: PayslipPdfProps): Promise<Buffer> {
+export async function renderPayslipPdfBuffer(
+  props: PayslipPdfProps,
+): Promise<Buffer> {
   return renderToBuffer(<PayslipDocument {...props} />);
 }
