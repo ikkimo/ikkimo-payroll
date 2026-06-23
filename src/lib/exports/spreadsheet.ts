@@ -1,11 +1,11 @@
 // ---------------------------------------------------------------------------
 // Builds the "full spreadsheet" export — one sheet, one row per employee,
-// every computed pay field, with a totals row at the bottom.
+// every stored pay field, with a totals row. Reads only; computes nothing.
 // ---------------------------------------------------------------------------
 
 import ExcelJS from "exceljs";
-import type { PayrollRow } from "./payrollRow";
-import { sumRows, monthName } from "./payrollRow";
+import type { ExportRow } from "./types";
+import { monthName } from "./types";
 
 const HEADER_FILL: ExcelJS.Fill = {
   type: "pattern",
@@ -29,7 +29,7 @@ type Column = {
   key: string;
   width: number;
   money?: boolean;
-  get: (r: PayrollRow) => string | number;
+  get: (r: ExportRow) => string | number;
 };
 
 const COLUMNS: Column[] = [
@@ -37,28 +37,29 @@ const COLUMNS: Column[] = [
   { header: "Name", key: "employee_name", width: 24, get: (r) => r.employee.employee_name },
   { header: "Department", key: "department", width: 16, get: (r) => r.employee.department ?? "" },
   { header: "Position", key: "position", width: 18, get: (r) => r.employee.positions?.name ?? "" },
-  { header: "Basic", key: "basic", width: 14, money: true, get: (r) => r.basic },
-  { header: "Position allowance", key: "position_allowance", width: 14, money: true, get: (r) => r.position_allowance },
-  { header: "Skill grade increase", key: "skill_grade_increase", width: 14, money: true, get: (r) => r.skill_grade_increase },
-  { header: "Housing allowance", key: "housing_allowance", width: 14, money: true, get: (r) => r.housing_allowance },
-  { header: "Meal allowance", key: "meal_allowance", width: 14, money: true, get: (r) => r.meal_allowance },
-  { header: "Overtime pay", key: "overtime_pay", width: 14, money: true, get: (r) => r.overtime_pay },
-  { header: "Attendance reward", key: "attendance_reward", width: 14, money: true, get: (r) => r.attendance_reward },
-  { header: "Other adjustment", key: "other_adjustment", width: 14, money: true, get: (r) => r.other_adjustment },
-  { header: "Gross", key: "gross", width: 15, money: true, get: (r) => r.gross },
-  { header: "Unexcused deduction", key: "unexcused_deduction", width: 14, money: true, get: (r) => r.unexcused_deduction },
-  { header: "Lateness deduction", key: "lateness_deduction", width: 14, money: true, get: (r) => r.lateness_deduction },
-  { header: "BPJS employee JHT", key: "bpjs_employee_jht", width: 14, money: true, get: (r) => r.bpjs_employee_jht },
-  { header: "BPJS employee JP", key: "bpjs_employee_jp", width: 14, money: true, get: (r) => r.bpjs_employee_jp },
-  { header: "Loan repayment", key: "loan_repayment", width: 14, money: true, get: (r) => r.loan_repayment },
-  { header: "New loan", key: "new_loan", width: 14, money: true, get: (r) => r.new_loan },
-  { header: "Loan balance (end)", key: "projected_loan_balance", width: 14, money: true, get: (r) => r.projected_loan_balance },
-  { header: "Net pay", key: "net_pay", width: 16, money: true, get: (r) => r.net_pay },
-  { header: "BPJS company JHT", key: "bpjs_company_jht", width: 14, money: true, get: (r) => r.bpjs_company_jht },
-  { header: "BPJS company JKM", key: "bpjs_company_jkm", width: 14, money: true, get: (r) => r.bpjs_company_jkm },
-  { header: "BPJS company JKK", key: "bpjs_company_jkk", width: 14, money: true, get: (r) => r.bpjs_company_jkk },
-  { header: "BPJS company JP", key: "bpjs_company_jp", width: 14, money: true, get: (r) => r.bpjs_company_jp },
-  { header: "Total company BPJS", key: "company_bpjs_total", width: 16, money: true, get: (r) => r.company_bpjs_total },
+  { header: "Basic + allowances", key: "main_salary", width: 16, money: true, get: (r) => r.entry.main_salary_idr },
+  { header: "Position allowance", key: "position_allowance", width: 14, money: true, get: (r) => r.entry.position_allowance_idr },
+  { header: "Skill grade increase", key: "skill_grade_increase", width: 14, money: true, get: (r) => r.entry.skill_grade_increase_idr },
+  { header: "Housing allowance", key: "housing_allowance", width: 14, money: true, get: (r) => r.entry.housing_allowance_idr },
+  { header: "Meal allowance", key: "meal_allowance", width: 14, money: true, get: (r) => r.entry.meal_allowance_idr },
+  { header: "Overtime pay", key: "overtime_pay", width: 14, money: true, get: (r) => r.entry.overtime_pay_idr },
+  { header: "Attendance reward", key: "attendance_reward", width: 14, money: true, get: (r) => r.entry.attendance_reward_idr },
+  { header: "Other adjustment", key: "other_adjustment", width: 14, money: true, get: (r) => r.entry.other_adjustment_idr },
+  { header: "Gross", key: "gross", width: 15, money: true, get: (r) => r.entry.gross_idr },
+  { header: "Unexcused deduction", key: "unexcused_deduction", width: 14, money: true, get: (r) => r.entry.unexcused_deduction_idr },
+  { header: "Lateness deduction", key: "lateness_deduction", width: 14, money: true, get: (r) => r.entry.lateness_deduction_idr },
+  { header: "BPJS employee JHT", key: "bpjs_employee_jht", width: 14, money: true, get: (r) => r.entry.bpjs_employee_jht_idr },
+  { header: "BPJS employee JP", key: "bpjs_employee_jp", width: 14, money: true, get: (r) => r.entry.bpjs_employee_jp_idr },
+  { header: "Loan repayment", key: "loan_repayment", width: 14, money: true, get: (r) => r.entry.loan_repayment_idr },
+  { header: "New loan", key: "new_loan", width: 14, money: true, get: (r) => r.entry.new_loan_idr },
+  { header: "Loan balance (before)", key: "loan_balance_before", width: 14, money: true, get: (r) => r.entry.loan_balance_before_idr },
+  { header: "Loan balance (after)", key: "loan_balance_after", width: 14, money: true, get: (r) => r.entry.loan_balance_after_idr },
+  { header: "Net pay", key: "net_pay", width: 16, money: true, get: (r) => r.entry.salary_to_pay },
+  { header: "BPJS company JHT", key: "bpjs_company_jht", width: 14, money: true, get: (r) => r.entry.bpjs_company_jht_idr },
+  { header: "BPJS company JKM", key: "bpjs_company_jkm", width: 14, money: true, get: (r) => r.entry.bpjs_company_jkm_idr },
+  { header: "BPJS company JKK", key: "bpjs_company_jkk", width: 14, money: true, get: (r) => r.entry.bpjs_company_jkk_idr },
+  { header: "BPJS company JP", key: "bpjs_company_jp", width: 14, money: true, get: (r) => r.entry.bpjs_company_jp_idr },
+  { header: "Total company BPJS", key: "company_bpjs_total", width: 16, money: true, get: (r) => r.entry.company_bpjs_total_idr },
   { header: "Bank", key: "bank", width: 12, get: (r) => r.employee.bank ?? "" },
   { header: "Bank account", key: "bank_account", width: 18, get: (r) => r.employee.bank_account ?? "" },
   { header: "Account name", key: "bank_account_name", width: 22, get: (r) => r.employee.bank_account_name ?? "" },
@@ -70,7 +71,7 @@ const MONEY_COL_INDICES = COLUMNS.reduce<number[]>((acc, col, i) => {
 }, []);
 
 export async function buildPayrollSpreadsheet(
-  rows: PayrollRow[],
+  rows: ExportRow[],
   year: number,
   month: number,
 ): Promise<ExcelJS.Workbook> {
@@ -101,64 +102,18 @@ export async function buildPayrollSpreadsheet(
   }
 
   for (let i = 2; i <= rows.length + 1; i++) {
-    const dataRow = ws.getRow(i);
-    dataRow.eachCell((cell) => {
+    ws.getRow(i).eachCell((cell) => {
       cell.font = { name: "Arial", size: 10 };
     });
   }
 
-  const totals = sumRows(rows);
+  const sumOf = (get: (r: ExportRow) => number) =>
+    rows.reduce((acc, r) => acc + (get(r) || 0), 0);
+
   const totalsRowValues = COLUMNS.map((c) => {
-    switch (c.key) {
-      case "employee_code":
-        return "TOTAL";
-      case "basic":
-        return rows.reduce((a, r) => a + r.basic, 0);
-      case "position_allowance":
-        return rows.reduce((a, r) => a + r.position_allowance, 0);
-      case "skill_grade_increase":
-        return rows.reduce((a, r) => a + r.skill_grade_increase, 0);
-      case "housing_allowance":
-        return totals.housing_allowance;
-      case "meal_allowance":
-        return totals.meal_allowance;
-      case "overtime_pay":
-        return totals.overtime_pay;
-      case "attendance_reward":
-        return totals.attendance_reward;
-      case "other_adjustment":
-        return totals.other_adjustment;
-      case "gross":
-        return totals.gross;
-      case "unexcused_deduction":
-        return totals.unexcused_deduction;
-      case "lateness_deduction":
-        return totals.lateness_deduction;
-      case "bpjs_employee_jht":
-        return totals.bpjs_employee_jht;
-      case "bpjs_employee_jp":
-        return totals.bpjs_employee_jp;
-      case "loan_repayment":
-        return totals.loan_repayment;
-      case "new_loan":
-        return rows.reduce((a, r) => a + r.new_loan, 0);
-      case "projected_loan_balance":
-        return rows.reduce((a, r) => a + r.projected_loan_balance, 0);
-      case "net_pay":
-        return totals.net_pay;
-      case "bpjs_company_jht":
-        return totals.bpjs_company_jht;
-      case "bpjs_company_jkm":
-        return totals.bpjs_company_jkm;
-      case "bpjs_company_jkk":
-        return totals.bpjs_company_jkk;
-      case "bpjs_company_jp":
-        return totals.bpjs_company_jp;
-      case "company_bpjs_total":
-        return totals.company_bpjs_total;
-      default:
-        return "";
-    }
+    if (c.key === "employee_code") return "TOTAL";
+    if (!c.money) return "";
+    return sumOf(c.get as (r: ExportRow) => number);
   });
 
   const totalsRow = ws.addRow(totalsRowValues);
