@@ -1001,18 +1001,40 @@ function PayrollFormPageInner() {
       setSaving(false);
       return;
     }
+    //this works but not as good
+    // const { error: statusErr } = await supabase
+    //   .from("payroll_periods")
+    //   .update({ locked: true })
+    //   .eq("id", period.id);
 
-    const { error: statusErr } = await supabase
-      .from("payroll_periods")
-      .update({ locked: true })
-      .eq("id", period.id);
+    // if (statusErr) {
+    //   console.error("[handleSubmit] Status update failed:", statusErr);
+    //   setSaveMsg(`Status update failed: ${statusErr.message}`);
+    //   setSaving(false);
+    //   return;
+    // }
+    const { data: lockedRows, error: statusErr } = await supabase
+    .from("payroll_periods")
+    .update({ locked: true })
+    .eq("id", period.id)
+    .select("id, locked"); // <- forces a real read-back of what was actually updated
 
-    if (statusErr) {
-      console.error("[handleSubmit] Status update failed:", statusErr);
-      setSaveMsg(`Status update failed: ${statusErr.message}`);
-      setSaving(false);
-      return;
-    }
+  if (statusErr) {
+    console.error("[handleSubmit] Status update failed:", statusErr);
+    setSaveMsg(`Status update failed: ${statusErr.message}`);
+    setSaving(false);
+    return;
+  }
+
+  if (!lockedRows || lockedRows.length === 0) {
+    // RLS silently blocked the update — no error, but nothing was changed.
+    console.error("[handleSubmit] Lock update affected 0 rows (likely RLS).");
+    setSaveMsg(
+      "Submit failed: you don't have permission to lock this payroll period. Contact an admin.",
+    );
+    setSaving(false);
+    return;
+  }
 
     console.log("[handleSubmit] ✅ Submitted successfully");
     setSessionStatus("submitted");
