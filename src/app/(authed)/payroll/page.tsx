@@ -636,6 +636,8 @@ function PayrollFormPageInner() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [generatingExports, setGeneratingExports] = useState(false);
+  const [exportsError, setExportsError] = useState<string | null>(null);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [resetPassword, setResetPassword] = useState("");
@@ -938,6 +940,7 @@ function PayrollFormPageInner() {
     );
     setSaving(true);
     setShowSubmitModal(false);
+    setExportsError(null);
 
     const upsertRows = employees.map((emp) => {
       const inp =
@@ -963,6 +966,28 @@ function PayrollFormPageInner() {
         other_adjustment_idr: inp.other_adjustment_idr,
         other_adjustment_note: inp.other_adjustment_note || null,
         salary_to_pay: row?.net_pay ?? null,
+        // Full breakdown, frozen at submit time. This is what the export
+        // routes read — they never recompute pay, only this table.
+        main_salary_idr: row?.main_salary ?? 0,
+        position_allowance_idr: row?.position_allowance ?? 0,
+        skill_grade_increase_idr: row?.skill_grade_increase ?? 0,
+        housing_allowance_idr: row?.housing_allowance ?? 0,
+        meal_allowance_idr: row?.meal_allowance ?? 0,
+        meal_eligible_days: row?.meal_eligible_days ?? 0,
+        attendance_reward_idr: row?.attendance_reward ?? 0,
+        overtime_pay_idr: row?.overtime_pay ?? 0,
+        unexcused_deduction_idr: row?.unexcused_deduction ?? 0,
+        lateness_deduction_idr: row?.lateness_deduction ?? 0,
+        gross_idr: row?.gross ?? 0,
+        bpjs_employee_jht_idr: row?.bpjs_employee_jht ?? 0,
+        bpjs_employee_jp_idr: row?.bpjs_employee_jp ?? 0,
+        bpjs_company_jht_idr: row?.bpjs_company_jht ?? 0,
+        bpjs_company_jkm_idr: row?.bpjs_company_jkm ?? 0,
+        bpjs_company_jkk_idr: row?.bpjs_company_jkk ?? 0,
+        bpjs_company_jp_idr: row?.bpjs_company_jp ?? 0,
+        company_bpjs_total_idr: row?.company_bpjs_total ?? 0,
+        loan_balance_before_idr: row?.loan_balance ?? 0,
+        loan_balance_after_idr: row?.projected_loan_balance ?? 0,
       };
     });
 
@@ -976,23 +1001,73 @@ function PayrollFormPageInner() {
       setSaving(false);
       return;
     }
+    //this works but not as good
+    // const { error: statusErr } = await supabase
+    //   .from("payroll_periods")
+    //   .update({ locked: true })
+    //   .eq("id", period.id);
 
-    const { error: statusErr } = await supabase
-      .from("payroll_periods")
-      .update({ locked: true })
-      .eq("id", period.id);
+    // if (statusErr) {
+    //   console.error("[handleSubmit] Status update failed:", statusErr);
+    //   setSaveMsg(`Status update failed: ${statusErr.message}`);
+    //   setSaving(false);
+    //   return;
+    // }
+    const { data: lockedRows, error: statusErr } = await supabase
+    .from("payroll_periods")
+    .update({ locked: true })
+    .eq("id", period.id)
+    .select("id, locked"); // <- forces a real read-back of what was actually updated
 
-    if (statusErr) {
-      console.error("[handleSubmit] Status update failed:", statusErr);
-      setSaveMsg(`Status update failed: ${statusErr.message}`);
-    } else {
-      console.log("[handleSubmit] ✅ Submitted successfully");
-      setSessionStatus("submitted");
-      setPeriod((p) => (p ? { ...p, locked: true } : p));
-      setSaveMsg("Submitted");
-      setTimeout(() => setSaveMsg(null), 3000);
-    }
+  if (statusErr) {
+    console.error("[handleSubmit] Status update failed:", statusErr);
+    setSaveMsg(`Status update failed: ${statusErr.message}`);
     setSaving(false);
+    return;
+  }
+
+  if (!lockedRows || lockedRows.length === 0) {
+    // RLS silently blocked the update — no error, but nothing was changed.
+    console.error("[handleSubmit] Lock update affected 0 rows (likely RLS).");
+    setSaveMsg(
+      "Submit failed: you don't have permission to lock this payroll period. Contact an admin.",
+    );
+    setSaving(false);
+    return;
+  }
+
+    console.log("[handleSubmit] ✅ Submitted successfully");
+    setSessionStatus("submitted");
+    setPeriod((p) => (p ? { ...p, locked: true } : p));
+    setSaveMsg("Submitted");
+    setTimeout(() => setSaveMsg(null), 3000);
+    setSaving(false);
+
+    // Generate the spreadsheet + payslip files now, once, server-side.
+    // The Exports page never generates anything itself — it only lists
+    // and downloads whatever this call produces.
+    setGeneratingExports(true);
+    try {
+      const res = await fetch("/api/exports/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ period_id: period.id }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Document generation failed (${res.status})`);
+      }
+      console.log("[handleSubmit] ✅ Export documents generated");
+    } catch (err) {
+      console.error("[handleSubmit] Export generation failed:", err);
+      setExportsError(
+        err instanceof Error
+          ? `Payroll submitted, but document generation failed: ${err.message}. You can retry from the Exports page.`
+          : "Payroll submitted, but document generation failed. You can retry from the Exports page.",
+      );
+    } finally {
+      setGeneratingExports(false);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1243,6 +1318,14 @@ function PayrollFormPageInner() {
                   <span className="text-xs text-[var(--ikkimo-text-muted,#888)]">
                     {saveMsg}
                   </span>
+                )}
+                {generatingExports && (
+                  <span className="text-xs text-[var(--ikkimo-text-muted,#888)]">
+                    Generating spreadsheet and payslips…
+                  </span>
+                )}
+                {exportsError && (
+                  <span className="text-xs text-red-600">{exportsError}</span>
                 )}
                 {isSubmitted ? (
                   <span className="text-xs text-[var(--ikkimo-text-muted,#888)]">
