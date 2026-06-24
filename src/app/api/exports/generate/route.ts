@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { buildPayrollSpreadsheet } from "@/lib/exports/spreadsheet";
 import { buildSinglePayslipWorkbook, type CompanyInfo } from "@/lib/exports/payslipExcel";
-import { renderPayslipPdfBuffer } from "@/lib/exports/payslipPdf";
 import type { ExportRow, StoredPayrollEntry, EmployeeForExport } from "@/lib/exports/types";
 import fs from "node:fs";
 import path from "node:path";
@@ -25,8 +24,10 @@ const ENTRY_SELECT = [
   "company_bpjs_total_idr", "loan_balance_before_idr", "loan_balance_after_idr",
 ].join(", ");
 
+// NOTE: start_date added — the payslip template's "Mulai Bekerja / Date of
+// Joining" and "Lama Bekerja / Length of Service" fields need it.
 const EMPLOYEE_SELECT =
-  "uuid, employee_code, employee_name, preferred_name, department, bank, bank_account, bank_account_name, positions(name)";
+  "uuid, employee_code, employee_name, preferred_name, department, start_date, bank, bank_account, bank_account_name, positions(name)";
 
 function loadLogoBase64(): string | null {
   try {
@@ -54,7 +55,8 @@ function safeFileSegment(s: string): string {
  * Called exactly once, by handleSubmit, right after a payroll period is
  * locked. Reads the just-written payroll_entries breakdown (no
  * calculation happens here — it only ever reads stored columns), builds
- * the full spreadsheet and every employee's payslip (xlsx + pdf), and
+ * the full spreadsheet and every employee's payslip (.xlsx only — PDF
+ * export was removed, the Excel files are the only deliverable now), and
  * uploads them all to Supabase Storage. The Exports page later just lists
  * and signs URLs for whatever this run produced — it never calls this
  * route's calculation path because there isn't one.
@@ -122,7 +124,6 @@ export async function POST(req: NextRequest) {
 
   const folder = `${period.year}-${String(period.month).padStart(2, "0")}`;
   const payslipDate = new Date();
-  const logoDataUri = COMPANY.logoPngBase64 ? `data:image/png;base64,${COMPANY.logoPngBase64}` : null;
 
   const uploadErrors: string[] = [];
 
@@ -141,7 +142,7 @@ export async function POST(req: NextRequest) {
     uploadErrors.push(`spreadsheet.xlsx: ${err instanceof Error ? err.message : "unknown error"}`);
   }
 
-  // 2. Per-employee payslips (xlsx + pdf)
+  // 2. Per-employee payslips (.xlsx only)
   for (const row of rows) {
     const codeSafe = safeFileSegment(row.employee.employee_code || row.employee.uuid);
 
@@ -162,26 +163,6 @@ export async function POST(req: NextRequest) {
       if (error) uploadErrors.push(`payslips/${codeSafe}.xlsx: ${error.message}`);
     } catch (err) {
       uploadErrors.push(`payslips/${codeSafe}.xlsx: ${err instanceof Error ? err.message : "unknown error"}`);
-    }
-
-    try {
-      const pdfBuffer = await renderPayslipPdfBuffer({
-        row,
-        company: COMPANY,
-        year: period.year,
-        month: period.month,
-        payslipDate,
-        logoDataUri,
-      });
-      const { error } = await supabaseAdmin.storage
-        .from(BUCKET)
-        .upload(`${folder}/payslips/${codeSafe}.pdf`, pdfBuffer, {
-          contentType: "application/pdf",
-          upsert: true,
-        });
-      if (error) uploadErrors.push(`payslips/${codeSafe}.pdf: ${error.message}`);
-    } catch (err) {
-      uploadErrors.push(`payslips/${codeSafe}.pdf: ${err instanceof Error ? err.message : "unknown error"}`);
     }
   }
 

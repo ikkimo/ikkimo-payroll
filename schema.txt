@@ -1,0 +1,870 @@
+--
+-- PostgreSQL database dump
+--
+
+\restrict jcnhY9elFZHYt2o158I6UCWHB4lpYP5iXbgtYPRPklrmILbE0HuXb2Cb1ST11gO
+
+-- Dumped from database version 17.6
+-- Dumped by pg_dump version 17.10 (Homebrew)
+
+
+--
+-- Name: public; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA public;
+
+
+--
+-- Name: handle_new_user(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.handle_new_user() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $$
+begin
+  insert into public.profiles (id, role)
+  values (new.id, 'viewer')
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+
+--
+-- Name: has_role(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.has_role(required_role text) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select exists (
+    select 1 from public.profiles p
+    where p.id = auth.uid() and p.role = required_role
+  );
+$$;
+
+
+--
+-- Name: is_admin_or_payroll(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.is_admin_or_payroll() RETURNS boolean
+    LANGUAGE sql STABLE
+    AS $$
+  select exists (
+    select 1 from public.profiles p
+    where p.id = auth.uid() and p.role in ('admin','payroll')
+  );
+$$;
+
+
+--
+-- Name: set_updated_at(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.set_updated_at() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+
+
+
+--
+-- Name: employees; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.employees (
+    uuid uuid DEFAULT gen_random_uuid() NOT NULL,
+    internal_no integer,
+    employee_code text NOT NULL,
+    employee_name text NOT NULL,
+    department text,
+    start_date date,
+    basic numeric(14,2) DEFAULT 0 NOT NULL,
+    current_salary numeric(14,2),
+    skill_grade_id uuid,
+    seniority_grade_id uuid,
+    active boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    preferred_name text,
+    fingerprint_id text,
+    probation boolean DEFAULT false NOT NULL,
+    position_id uuid NOT NULL,
+    gets_bpjs_jp boolean DEFAULT true NOT NULL,
+    thr_preference text DEFAULT 'balinese'::text NOT NULL,
+    cash_loan_balance_idr numeric(14,2) DEFAULT 0 NOT NULL,
+    housing_allowance_idr numeric(14,2) DEFAULT 0 NOT NULL,
+    gets_meal_allowance boolean DEFAULT true NOT NULL,
+    bank text,
+    bank_account text,
+    bank_account_name text,
+    CONSTRAINT employee_code_format CHECK ((employee_code ~ '^[A-Za-z0-9]{3,12}$'::text)),
+    CONSTRAINT employees_bank_account_name_no_trailing_spaces CHECK (((bank_account_name IS NULL) OR (bank_account_name = btrim(bank_account_name)))),
+    CONSTRAINT employees_thr_religion_check CHECK ((thr_preference = ANY (ARRAY['muslim'::text, 'christian'::text, 'balinese'::text])))
+);
+
+
+--
+-- Name: indonesia_holidays; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.indonesia_holidays (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    date date NOT NULL,
+    name text NOT NULL,
+    year integer NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    "Description" text
+);
+
+
+--
+-- Name: payroll_entries; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.payroll_entries (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    period_id uuid NOT NULL,
+    employee_uuid uuid NOT NULL,
+    full_days_worked numeric(5,1) DEFAULT 0 NOT NULL,
+    on_time_days integer DEFAULT 0 NOT NULL,
+    excused_full_days integer DEFAULT 0 NOT NULL,
+    unexcused_full_days integer DEFAULT 0 NOT NULL,
+    notes text,
+    salary_to_pay numeric(14,2),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    excused_half_days integer DEFAULT 0 NOT NULL,
+    unexcused_half_days integer DEFAULT 0 NOT NULL,
+    late_minutes_count integer DEFAULT 0 NOT NULL,
+    meal_allowance_idr numeric(14,2) DEFAULT 0 NOT NULL,
+    loan_repayment_idr numeric(14,2) DEFAULT 0 NOT NULL,
+    new_loan_idr numeric(14,2) DEFAULT 0 NOT NULL,
+    overtime_hours_1 numeric(8,2) DEFAULT 0 NOT NULL,
+    overtime_hours_2 numeric(8,2) DEFAULT 0 NOT NULL,
+    overtime_hours_3 numeric(8,2) DEFAULT 0 NOT NULL,
+    other_adjustment_idr numeric(14,2) DEFAULT 0 NOT NULL,
+    other_adjustment_note text,
+    main_salary_idr numeric(14,2) DEFAULT 0 NOT NULL,
+    position_allowance_idr numeric(14,2) DEFAULT 0 NOT NULL,
+    skill_grade_increase_idr numeric(14,2) DEFAULT 0 NOT NULL,
+    housing_allowance_idr numeric(14,2) DEFAULT 0 NOT NULL,
+    meal_eligible_days numeric(5,1) DEFAULT 0 NOT NULL,
+    attendance_reward_idr numeric(14,2) DEFAULT 0 NOT NULL,
+    overtime_pay_idr numeric(14,2) DEFAULT 0 NOT NULL,
+    unexcused_deduction_idr numeric(14,2) DEFAULT 0 NOT NULL,
+    lateness_deduction_idr numeric(14,2) DEFAULT 0 NOT NULL,
+    gross_idr numeric(14,2) DEFAULT 0 NOT NULL,
+    bpjs_employee_jht_idr numeric(14,2) DEFAULT 0 NOT NULL,
+    bpjs_employee_jp_idr numeric(14,2) DEFAULT 0 NOT NULL,
+    bpjs_company_jht_idr numeric(14,2) DEFAULT 0 NOT NULL,
+    bpjs_company_jkm_idr numeric(14,2) DEFAULT 0 NOT NULL,
+    bpjs_company_jkk_idr numeric(14,2) DEFAULT 0 NOT NULL,
+    bpjs_company_jp_idr numeric(14,2) DEFAULT 0 NOT NULL,
+    company_bpjs_total_idr numeric(14,2) DEFAULT 0 NOT NULL,
+    loan_balance_before_idr numeric(14,2) DEFAULT 0 NOT NULL,
+    loan_balance_after_idr numeric(14,2) DEFAULT 0 NOT NULL
+);
+
+
+--
+-- Name: payroll_periods; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.payroll_periods (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    year integer NOT NULL,
+    month integer NOT NULL,
+    working_days integer NOT NULL,
+    locked boolean DEFAULT false NOT NULL,
+    notes text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    red_days integer DEFAULT 0 NOT NULL,
+    CONSTRAINT payroll_periods_month_check CHECK (((month >= 1) AND (month <= 12))),
+    CONSTRAINT payroll_periods_planned_working_days_check CHECK ((working_days >= 0)),
+    CONSTRAINT payroll_periods_red_days_check CHECK (((red_days >= 0) AND (red_days <= 31))),
+    CONSTRAINT payroll_periods_red_days_range CHECK (((red_days >= 0) AND (red_days <= 31)))
+);
+
+
+--
+-- Name: payroll_settings; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.payroll_settings (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    standard_working_days integer DEFAULT 22 NOT NULL,
+    bpjs_employee_jht numeric(8,6) DEFAULT 0 NOT NULL,
+    bpjs_employee_jp numeric(8,6) DEFAULT 0 NOT NULL,
+    bpjs_company_jht numeric(8,6) DEFAULT 0 NOT NULL,
+    bpjs_company_jkm numeric(8,6) DEFAULT 0 NOT NULL,
+    bpjs_company_jkk numeric(8,6) DEFAULT 0 NOT NULL,
+    bpjs_company_jp numeric(8,6) DEFAULT 0 NOT NULL,
+    overtime1_multiplier numeric(6,3) DEFAULT 1.5 NOT NULL,
+    overtime2_multiplier numeric(6,3) DEFAULT 2.0 NOT NULL,
+    overtime3_multiplier numeric(6,3) DEFAULT 3.0 NOT NULL,
+    thr numeric(6,3) DEFAULT 1.0 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    hours_per_day integer DEFAULT 8 NOT NULL,
+    thr_muslim_date date,
+    thr_christian_date date,
+    thr_hindu_date date,
+    payroll_end_date integer DEFAULT 25 NOT NULL,
+    meal_allowance_per_day_idr numeric(14,2) DEFAULT 10000 NOT NULL,
+    tardiness_deduction_per_instance_idr numeric(14,2) DEFAULT 50000 NOT NULL,
+    lateness_base_deduction_idr numeric(14,2) DEFAULT 25000 NOT NULL,
+    lateness_base_minutes integer DEFAULT 5 NOT NULL,
+    lateness_increment_idr numeric(14,2) DEFAULT 10000 NOT NULL,
+    lateness_increment_minutes integer DEFAULT 5 NOT NULL,
+    attendance_reward_idr integer DEFAULT 100000 NOT NULL,
+    CONSTRAINT payroll_settings_hours_per_day_chk CHECK (((hours_per_day >= 1) AND (hours_per_day <= 24))),
+    CONSTRAINT payroll_settings_payroll_end_date_day_chk CHECK (((payroll_end_date >= 1) AND (payroll_end_date <= 31))),
+    CONSTRAINT payroll_settings_standard_working_days_chk CHECK (((standard_working_days >= 1) AND (standard_working_days <= 31)))
+);
+
+
+--
+-- Name: positions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.positions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    name text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    allowance_idr numeric(14,2) DEFAULT 0 NOT NULL
+);
+
+
+--
+-- Name: profiles; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.profiles (
+    id uuid NOT NULL,
+    role text DEFAULT 'viewer'::text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT profiles_role_check CHECK ((role = ANY (ARRAY['admin'::text, 'payroll'::text, 'viewer'::text])))
+);
+
+
+--
+-- Name: seniority_grades; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.seniority_grades (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    notes text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    increase_monthly_idr integer DEFAULT 0 NOT NULL,
+    grade integer NOT NULL,
+    CONSTRAINT seniority_grade_non_negative CHECK ((grade >= 0))
+);
+
+
+--
+-- Name: skill_grades; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.skill_grades (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    notes text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    level numeric(4,2) NOT NULL,
+    increase_monthly_idr integer DEFAULT 0 NOT NULL,
+    position_id uuid NOT NULL,
+    CONSTRAINT skill_grades_level_positive CHECK ((level > (0)::numeric))
+);
+
+
+--
+-- Name: employees employees_bank_account_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.employees
+    ADD CONSTRAINT employees_bank_account_unique UNIQUE (bank_account);
+
+
+--
+-- Name: employees employees_employee_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.employees
+    ADD CONSTRAINT employees_employee_id_key UNIQUE (employee_code);
+
+
+--
+-- Name: employees employees_internal_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.employees
+    ADD CONSTRAINT employees_internal_id_key UNIQUE (internal_no);
+
+
+--
+-- Name: employees employees_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.employees
+    ADD CONSTRAINT employees_pkey PRIMARY KEY (uuid);
+
+
+--
+-- Name: indonesia_holidays indonesia_holidays_date_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.indonesia_holidays
+    ADD CONSTRAINT indonesia_holidays_date_key UNIQUE (date);
+
+
+--
+-- Name: indonesia_holidays indonesia_holidays_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.indonesia_holidays
+    ADD CONSTRAINT indonesia_holidays_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: payroll_entries payroll_entries_period_id_employee_uuid_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payroll_entries
+    ADD CONSTRAINT payroll_entries_period_id_employee_uuid_key UNIQUE (period_id, employee_uuid);
+
+
+--
+-- Name: payroll_entries payroll_entries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payroll_entries
+    ADD CONSTRAINT payroll_entries_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: payroll_periods payroll_periods_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payroll_periods
+    ADD CONSTRAINT payroll_periods_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: payroll_periods payroll_periods_year_month_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payroll_periods
+    ADD CONSTRAINT payroll_periods_year_month_key UNIQUE (year, month);
+
+
+--
+-- Name: payroll_settings payroll_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payroll_settings
+    ADD CONSTRAINT payroll_settings_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: positions positions_name_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.positions
+    ADD CONSTRAINT positions_name_key UNIQUE (name);
+
+
+--
+-- Name: positions positions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.positions
+    ADD CONSTRAINT positions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: profiles profiles_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.profiles
+    ADD CONSTRAINT profiles_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: seniority_grades seniority_grades_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.seniority_grades
+    ADD CONSTRAINT seniority_grades_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: skill_grades skill_grades_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.skill_grades
+    ADD CONSTRAINT skill_grades_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: employees_employee_code_unique; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX employees_employee_code_unique ON public.employees USING btree (employee_code);
+
+
+--
+-- Name: employees_fingerprint_id_unique; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX employees_fingerprint_id_unique ON public.employees USING btree (fingerprint_id) WHERE (fingerprint_id IS NOT NULL);
+
+
+--
+-- Name: employees_internal_no_unique; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX employees_internal_no_unique ON public.employees USING btree (internal_no);
+
+
+--
+-- Name: idx_indonesia_holidays_date; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_indonesia_holidays_date ON public.indonesia_holidays USING btree (date);
+
+
+--
+-- Name: idx_indonesia_holidays_year; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_indonesia_holidays_year ON public.indonesia_holidays USING btree (year);
+
+
+--
+-- Name: idx_payroll_entries_employee; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_payroll_entries_employee ON public.payroll_entries USING btree (employee_uuid);
+
+
+--
+-- Name: idx_payroll_entries_period; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_payroll_entries_period ON public.payroll_entries USING btree (period_id);
+
+
+--
+-- Name: positions_name_lower_unique; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX positions_name_lower_unique ON public.positions USING btree (lower(TRIM(BOTH FROM name)));
+
+
+--
+-- Name: seniority_grades_grade_unique; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX seniority_grades_grade_unique ON public.seniority_grades USING btree (grade);
+
+
+--
+-- Name: skill_grades_position_id_level_unique; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX skill_grades_position_id_level_unique ON public.skill_grades USING btree (position_id, level);
+
+
+--
+-- Name: employees set_employees_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER set_employees_updated_at BEFORE UPDATE ON public.employees FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+
+--
+-- Name: payroll_entries set_entries_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER set_entries_updated_at BEFORE UPDATE ON public.payroll_entries FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+
+--
+-- Name: payroll_periods set_periods_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER set_periods_updated_at BEFORE UPDATE ON public.payroll_periods FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+
+--
+-- Name: employees employees_position_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.employees
+    ADD CONSTRAINT employees_position_id_fkey FOREIGN KEY (position_id) REFERENCES public.positions(id);
+
+
+--
+-- Name: employees employees_seniority_grade_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.employees
+    ADD CONSTRAINT employees_seniority_grade_id_fkey FOREIGN KEY (seniority_grade_id) REFERENCES public.seniority_grades(id);
+
+
+--
+-- Name: employees employees_skill_grade_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.employees
+    ADD CONSTRAINT employees_skill_grade_id_fkey FOREIGN KEY (skill_grade_id) REFERENCES public.skill_grades(id);
+
+
+--
+-- Name: payroll_entries payroll_entries_employee_uuid_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payroll_entries
+    ADD CONSTRAINT payroll_entries_employee_uuid_fkey FOREIGN KEY (employee_uuid) REFERENCES public.employees(uuid) ON DELETE RESTRICT;
+
+
+--
+-- Name: payroll_entries payroll_entries_period_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payroll_entries
+    ADD CONSTRAINT payroll_entries_period_id_fkey FOREIGN KEY (period_id) REFERENCES public.payroll_periods(id) ON DELETE CASCADE;
+
+
+--
+-- Name: profiles profiles_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.profiles
+    ADD CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: skill_grades skill_grades_position_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.skill_grades
+    ADD CONSTRAINT skill_grades_position_id_fkey FOREIGN KEY (position_id) REFERENCES public.positions(id);
+
+
+--
+-- Name: indonesia_holidays Public can view holidays; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Public can view holidays" ON public.indonesia_holidays FOR SELECT TO anon USING (true);
+
+
+--
+-- Name: profiles admin read all profiles; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "admin read all profiles" ON public.profiles FOR SELECT TO authenticated USING (public.has_role('admin'::text));
+
+
+--
+-- Name: profiles admin update roles; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "admin update roles" ON public.profiles FOR UPDATE TO authenticated USING (public.has_role('admin'::text)) WITH CHECK (public.has_role('admin'::text));
+
+
+--
+-- Name: employees; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.employees ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: employees employees read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "employees read" ON public.employees FOR SELECT TO authenticated USING (public.is_admin_or_payroll());
+
+
+--
+-- Name: employees employees update admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "employees update admin" ON public.employees FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+
+
+--
+-- Name: employees employees write admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "employees write admin" ON public.employees FOR INSERT TO authenticated WITH CHECK (public.has_role('admin'::text));
+
+
+--
+-- Name: employees employees_read_authenticated; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY employees_read_authenticated ON public.employees FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: payroll_entries entries delete if period unlocked; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "entries delete if period unlocked" ON public.payroll_entries FOR DELETE TO authenticated USING ((EXISTS ( SELECT 1
+   FROM public.payroll_periods
+  WHERE ((payroll_periods.id = payroll_entries.period_id) AND (payroll_periods.locked = false)))));
+
+
+--
+-- Name: payroll_entries entries insert if period unlocked; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "entries insert if period unlocked" ON public.payroll_entries FOR INSERT TO authenticated WITH CHECK ((EXISTS ( SELECT 1
+   FROM public.payroll_periods
+  WHERE ((payroll_periods.id = payroll_entries.period_id) AND (payroll_periods.locked = false)))));
+
+
+--
+-- Name: payroll_entries entries read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "entries read" ON public.payroll_entries FOR SELECT TO authenticated USING (public.has_role('admin'::text));
+
+
+--
+-- Name: payroll_entries entries select temp test; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "entries select temp test" ON public.payroll_entries FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: payroll_entries entries update if period unlocked; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "entries update if period unlocked" ON public.payroll_entries FOR UPDATE TO authenticated USING ((EXISTS ( SELECT 1
+   FROM public.payroll_periods
+  WHERE ((payroll_periods.id = payroll_entries.period_id) AND (payroll_periods.locked = false))))) WITH CHECK ((EXISTS ( SELECT 1
+   FROM public.payroll_periods
+  WHERE ((payroll_periods.id = payroll_entries.period_id) AND (payroll_periods.locked = false)))));
+
+
+--
+-- Name: indonesia_holidays; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.indonesia_holidays ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: payroll_entries; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.payroll_entries ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: payroll_periods; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.payroll_periods ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: payroll_periods payroll_periods_read_authenticated; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY payroll_periods_read_authenticated ON public.payroll_periods FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: payroll_settings; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.payroll_settings ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: payroll_settings payroll_settings_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY payroll_settings_read ON public.payroll_settings FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: payroll_settings payroll_settings_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY payroll_settings_update ON public.payroll_settings FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+
+
+--
+-- Name: payroll_settings payroll_settings_write; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY payroll_settings_write ON public.payroll_settings FOR INSERT TO authenticated WITH CHECK (true);
+
+
+--
+-- Name: payroll_periods periods read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "periods read" ON public.payroll_periods FOR SELECT TO authenticated USING (public.is_admin_or_payroll());
+
+
+--
+-- Name: payroll_periods periods update admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "periods update admin" ON public.payroll_periods FOR UPDATE TO authenticated USING (public.has_role('admin'::text)) WITH CHECK (public.has_role('admin'::text));
+
+
+--
+-- Name: payroll_periods periods write admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "periods write admin" ON public.payroll_periods FOR INSERT TO authenticated WITH CHECK (public.has_role('admin'::text));
+
+
+--
+-- Name: positions; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.positions ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: positions positions_delete; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY positions_delete ON public.positions FOR DELETE TO authenticated USING (true);
+
+
+--
+-- Name: positions positions_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY positions_insert ON public.positions FOR INSERT TO authenticated WITH CHECK (true);
+
+
+--
+-- Name: positions positions_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY positions_read ON public.positions FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: positions positions_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY positions_update ON public.positions FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+
+
+--
+-- Name: profiles; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: profiles read own profile; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "read own profile" ON public.profiles FOR SELECT TO authenticated USING ((id = auth.uid()));
+
+
+--
+-- Name: seniority_grades seniority grades read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "seniority grades read" ON public.seniority_grades FOR SELECT TO authenticated USING (public.is_admin_or_payroll());
+
+
+--
+-- Name: seniority_grades seniority grades update admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "seniority grades update admin" ON public.seniority_grades FOR UPDATE TO authenticated USING (public.has_role('admin'::text)) WITH CHECK (public.has_role('admin'::text));
+
+
+--
+-- Name: seniority_grades seniority grades write admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "seniority grades write admin" ON public.seniority_grades FOR INSERT TO authenticated WITH CHECK (public.has_role('admin'::text));
+
+
+--
+-- Name: seniority_grades; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.seniority_grades ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: seniority_grades seniority_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY seniority_select ON public.seniority_grades FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: seniority_grades seniority_write; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY seniority_write ON public.seniority_grades TO authenticated USING (true) WITH CHECK (true);
+
+
+--
+-- Name: skill_grades skill grades read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "skill grades read" ON public.skill_grades FOR SELECT TO authenticated USING (public.is_admin_or_payroll());
+
+
+--
+-- Name: skill_grades skill grades update admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "skill grades update admin" ON public.skill_grades FOR UPDATE TO authenticated USING (public.has_role('admin'::text)) WITH CHECK (public.has_role('admin'::text));
+
+
+--
+-- Name: skill_grades skill grades write admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "skill grades write admin" ON public.skill_grades FOR INSERT TO authenticated WITH CHECK (public.has_role('admin'::text));
+
+
+--
+-- Name: skill_grades; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.skill_grades ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: skill_grades skill_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY skill_select ON public.skill_grades FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: skill_grades skill_write; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY skill_write ON public.skill_grades TO authenticated USING (true) WITH CHECK (true);
+
+
+--
+-- PostgreSQL database dump complete
+--
+
+\unrestrict jcnhY9elFZHYt2o158I6UCWHB4lpYP5iXbgtYPRPklrmILbE0HuXb2Cb1ST11gO
+

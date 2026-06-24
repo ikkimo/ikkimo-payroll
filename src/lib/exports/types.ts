@@ -58,6 +58,7 @@ export type EmployeeForExport = {
   bank: string | null;
   bank_account: string | null;
   bank_account_name: string | null;
+  start_date: string | null; // NEW — needed for "Mulai Bekerja" / "Lama Bekerja" on the payslip
   positions?: { name: string } | null;
 };
 

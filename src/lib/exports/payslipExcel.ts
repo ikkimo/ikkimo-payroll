@@ -1,16 +1,31 @@
 // ---------------------------------------------------------------------------
 // Generates a single-employee payslip as an .xlsx workbook (ExcelJS).
+//
+// Instead of recreating the company's payslip layout cell-by-cell in code,
+// this loads the actual template asset (public/templates/Payslip_Template.xlsx
+// — the official Payslip_Template_1.xlsx with the dead historical sheets and
+// broken VLOOKUPs removed) and writes values straight into its named cells.
+// All fonts/borders/merges/page setup/logo come from the template file
+// itself, so visual fidelity is guaranteed -- nothing to keep in sync here.
+//
 // Reads only from the stored payroll_entries breakdown — performs no pay
-// calculation. Mirrors the company's existing Payslip_Template.xlsx layout.
+// calculation.
+//
+// Known gaps, intentionally left blank/zero (per product decision):
+//   - PPh21 income tax (S14)      — not tracked yet, to be wired up later.
+//   - THR (G16)                   — paid once a year, 0 most periods.
+//   - AL / DP table (I30:L31)     — always blank. Filled in by hand. Not
+//                                    related to the loan columns at all.
 // ---------------------------------------------------------------------------
 
 import ExcelJS from "exceljs";
+import fs from "node:fs";
+import path from "node:path";
 import type { ExportRow } from "./types";
-import { monthName, monthNameId } from "./types";
 
 export type CompanyInfo = {
   name: string;
-  logoPngBase64?: string | null;
+  logoPngBase64?: string | null; // unused now -- the logo is baked into the template image itself
 };
 
 export type PayslipContext = {
@@ -20,227 +35,17 @@ export type PayslipContext = {
   payslipDate: Date;
 };
 
-const THIN = { style: "thin" as const, color: { argb: "FFBFBFBF" } };
-const HEADER_FILL: ExcelJS.Fill = {
-  type: "pattern",
-  pattern: "solid",
-  fgColor: { argb: "FFE7E6E6" },
-};
+const TEMPLATE_PATH = path.join(process.cwd(), "public", "templates", "Payslip_Template.xlsx");
 
-function setLabelValue(
-  ws: ExcelJS.Worksheet,
-  row: number,
-  labelCol: string,
-  label: string,
-  valueCol: string,
-  value: string | number,
-  opts?: { bold?: boolean; numFmt?: string },
-) {
-  const labelCell = ws.getCell(`${labelCol}${row}`);
-  labelCell.value = label;
-  labelCell.font = { name: "Arial", size: 11, bold: !!opts?.bold };
-
-  const valueCell = ws.getCell(`${valueCol}${row}`);
-  valueCell.value = value;
-  valueCell.font = { name: "Arial", size: 11, bold: !!opts?.bold };
-  if (opts?.numFmt) valueCell.numFmt = opts.numFmt;
-  valueCell.alignment = { horizontal: "right" };
+function loadTemplateBuffer(): ArrayBuffer {
+  const buf = fs.readFileSync(TEMPLATE_PATH);
+  return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
 }
 
-export async function addPayslipSheet(
-  wb: ExcelJS.Workbook,
-  row: ExportRow,
-  ctx: PayslipContext,
-  sheetName: string,
-): Promise<ExcelJS.Worksheet> {
-  const ws = wb.addWorksheet(sheetName, {
-    pageSetup: {
-      paperSize: 9,
-      orientation: "portrait",
-      fitToPage: true,
-      fitToWidth: 1,
-      fitToHeight: 1,
-      margins: { left: 0.4, right: 0.4, top: 0.4, bottom: 0.4, header: 0, footer: 0 },
-    },
-  });
-
-  ws.columns = [
-    { width: 2.4 }, { width: 1.1 }, { width: 20 }, { width: 1.6 },
-    { width: 24 }, { width: 2 }, { width: 14 }, { width: 2 },
-    { width: 16 }, { width: 2 }, { width: 12 }, { width: 1.6 }, { width: 16 },
-  ];
-
-  const emp = row.employee;
-  const entry = row.entry;
-  const empName = emp.preferred_name ?? emp.employee_name;
-
-  ws.mergeCells("C2:G3");
-  const companyCell = ws.getCell("C2");
-  companyCell.value = ctx.company.name;
-  companyCell.font = { name: "Arial", size: 16, bold: true };
-  companyCell.alignment = { vertical: "middle" };
-
-  if (ctx.company.logoPngBase64) {
-    const imageId = wb.addImage({ base64: ctx.company.logoPngBase64, extension: "png" });
-    ws.addImage(imageId, { tl: { col: 8, row: 1 }, ext: { width: 40, height: 40 } });
-  }
-
-  ws.mergeCells("I2:K2");
-  const titleCell = ws.getCell("I2");
-  titleCell.value = "PAYSLIP";
-  titleCell.font = { name: "Arial", size: 12, bold: true };
-  titleCell.fill = HEADER_FILL;
-  titleCell.alignment = { horizontal: "center", vertical: "middle" };
-
-  ws.mergeCells("I3:K3");
-  const subtitleCell = ws.getCell("I3");
-  subtitleCell.value = "Slip gaji / Employee payslip";
-  subtitleCell.font = { name: "Arial", size: 9, italic: true };
-  subtitleCell.alignment = { horizontal: "center" };
-
-  let r = 5;
-  setLabelValue(ws, r, "C", "Nama / Name", "E", empName);
-  setLabelValue(ws, r, "I", "Periode / Period", "K", `${monthNameId(ctx.month)} / ${monthName(ctx.month)} ${ctx.year}`);
-  r++;
-  setLabelValue(ws, r, "C", "Jabatan / Position", "E", emp.positions?.name ?? "-");
-  setLabelValue(ws, r, "I", "Tgl slip / Payslip date", "K", ctx.payslipDate.toLocaleDateString("en-GB"));
-  r++;
-  setLabelValue(ws, r, "C", "Nº ID / Employee code", "E", emp.employee_code);
-  setLabelValue(ws, r, "I", "Divisi / Department", "K", emp.department ?? "-");
-
-  r += 2;
-
-  const sectionRow = r;
-  ws.getCell(`C${sectionRow}`).value = "PENERIMAAN / Earnings";
-  ws.getCell(`C${sectionRow}`).font = { name: "Arial", size: 12, bold: true };
-  ws.getCell(`I${sectionRow}`).value = "POTONGAN / Deductions";
-  ws.getCell(`I${sectionRow}`).font = { name: "Arial", size: 12, bold: true };
-  r += 1;
-
-  const earnings: Array<[string, number]> = [
-    ["Gaji pokok & tunjangan / Basic + allowances", entry.main_salary_idr],
-  ];
-  if (entry.housing_allowance_idr > 0) earnings.push(["Tunjangan perumahan / Housing", entry.housing_allowance_idr]);
-  if (entry.meal_allowance_idr > 0) earnings.push([`Uang makan / Meal (${entry.meal_eligible_days}d)`, entry.meal_allowance_idr]);
-  if (entry.overtime_pay_idr > 0) earnings.push(["Lembur / Overtime", entry.overtime_pay_idr]);
-  if (entry.attendance_reward_idr > 0) earnings.push(["Bonus kehadiran / Attendance reward", entry.attendance_reward_idr]);
-  if (entry.other_adjustment_idr > 0) earnings.push(["Lainnya / Other adjustment", entry.other_adjustment_idr]);
-
-  const deductions: Array<[string, number | null]> = [
-    ["Tanpa keterangan / Unexcused absence", entry.unexcused_deduction_idr || null],
-    ["Keterlambatan / Lateness", entry.lateness_deduction_idr || null],
-    ["Pajak penghasilan (PPh21) / Income tax", null],
-    ["BPJS Kesehatan / Health insurance", null],
-    ["BPJS JHT", entry.bpjs_employee_jht_idr || null],
-    ["BPJS JP", entry.bpjs_employee_jp_idr || null],
-    ["Cicilan pinjaman / Loan repayment", entry.loan_repayment_idr || null],
-  ];
-  if (entry.other_adjustment_idr < 0) deductions.push(["Lainnya / Other adjustment", Math.abs(entry.other_adjustment_idr)]);
-
-  const earningsStartRow = r;
-  const linesCount = Math.max(earnings.length, deductions.length);
-
-  for (let i = 0; i < linesCount; i++) {
-    const lr = r + i;
-    if (earnings[i]) {
-      ws.getCell(`C${lr}`).value = earnings[i][0];
-      ws.getCell(`C${lr}`).font = { name: "Arial", size: 10 };
-      const v = ws.getCell(`E${lr}`);
-      v.value = earnings[i][1];
-      v.numFmt = "#,##0";
-      v.font = { name: "Arial", size: 10 };
-      v.alignment = { horizontal: "right" };
-    }
-    if (deductions[i]) {
-      ws.getCell(`I${lr}`).value = deductions[i][0];
-      ws.getCell(`I${lr}`).font = { name: "Arial", size: 10 };
-      const v = ws.getCell(`K${lr}`);
-      v.value = deductions[i][1] ?? "";
-      if (deductions[i][1] !== null) v.numFmt = "#,##0";
-      v.font = { name: "Arial", size: 10 };
-      v.alignment = { horizontal: "right" };
-    }
-  }
-
-  r = earningsStartRow + linesCount + 1;
-
-  const totalDeductions =
-    entry.unexcused_deduction_idr +
-    entry.lateness_deduction_idr +
-    entry.bpjs_employee_jht_idr +
-    entry.bpjs_employee_jp_idr +
-    entry.loan_repayment_idr +
-    (entry.other_adjustment_idr < 0 ? Math.abs(entry.other_adjustment_idr) : 0);
-
-  ws.getCell(`C${r}`).value = "Gaji kotor / Gross salary";
-  ws.getCell(`C${r}`).font = { name: "Arial", size: 11, bold: true };
-  ws.getCell(`C${r}`).border = { top: THIN };
-  const grossCell = ws.getCell(`E${r}`);
-  grossCell.value = entry.gross_idr;
-  grossCell.numFmt = "#,##0";
-  grossCell.font = { name: "Arial", size: 11, bold: true };
-  grossCell.alignment = { horizontal: "right" };
-  grossCell.border = { top: THIN };
-
-  ws.getCell(`I${r}`).value = "Total potongan / Total deductions";
-  ws.getCell(`I${r}`).font = { name: "Arial", size: 11, bold: true };
-  ws.getCell(`I${r}`).border = { top: THIN };
-  const dedCell = ws.getCell(`K${r}`);
-  dedCell.value = totalDeductions;
-  dedCell.numFmt = "#,##0";
-  dedCell.font = { name: "Arial", size: 11, bold: true };
-  dedCell.alignment = { horizontal: "right" };
-  dedCell.border = { top: THIN };
-
-  r += 2;
-
-  ws.mergeCells(`C${r}:G${r}`);
-  const thpLabel = ws.getCell(`C${r}`);
-  thpLabel.value = "GAJI BERSIH / TAKE HOME PAY";
-  thpLabel.font = { name: "Arial", size: 12, bold: true };
-  thpLabel.fill = HEADER_FILL;
-  thpLabel.alignment = { vertical: "middle" };
-
-  ws.mergeCells(`I${r}:K${r}`);
-  const thpValue = ws.getCell(`I${r}`);
-  thpValue.value = entry.salary_to_pay;
-  thpValue.numFmt = '"Rp"#,##0';
-  thpValue.font = { name: "Arial", size: 14, bold: true };
-  thpValue.fill = HEADER_FILL;
-  thpValue.alignment = { horizontal: "right", vertical: "middle" };
-
-  r += 2;
-
-  setLabelValue(ws, r, "C", "Bank", "E", emp.bank ?? "-");
-  r++;
-  setLabelValue(ws, r, "C", "Nº rekening / Account no.", "E", emp.bank_account ?? "-");
-  r++;
-  setLabelValue(ws, r, "C", "Nama penerima / Beneficiary", "E", emp.bank_account_name ?? "-");
-
-  r += 3;
-
-  ws.getCell(`C${r}`).value = "Dibuat oleh / Prepared by,";
-  ws.getCell(`C${r}`).font = { name: "Arial", size: 10, bold: true };
-  ws.getCell(`I${r}`).value = "Diterima oleh / Received by,";
-  ws.getCell(`I${r}`).font = { name: "Arial", size: 10, bold: true };
-
-  r += 4;
-  ws.getCell(`C${r}`).value = "(_____________________)";
-  ws.getCell(`C${r}`).font = { name: "Arial", size: 10 };
-  ws.getCell(`I${r}`).value = "(_____________________)";
-  ws.getCell(`I${r}`).font = { name: "Arial", size: 10 };
-
-  r += 1;
-  ws.getCell(`C${r}`).value = "Administrasi";
-  ws.getCell(`C${r}`).font = { name: "Arial", size: 9, italic: true };
-  ws.getCell(`I${r}`).value = empName;
-  ws.getCell(`I${r}`).font = { name: "Arial", size: 9, italic: true };
-
-  r += 3;
-  ws.getCell(`C${r}`).value = "Dokumen ini dibuat otomatis oleh sistem / This is a system-generated document.";
-  ws.getCell(`C${r}`).font = { name: "Arial", size: 8, italic: true, color: { argb: "FF888888" } };
-
-  return ws;
+function monthsBetween(start: Date, end: Date): number {
+  let months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+  if (end.getDate() < start.getDate()) months -= 1;
+  return Math.max(months, 0);
 }
 
 export async function buildSinglePayslipWorkbook(
@@ -248,8 +53,73 @@ export async function buildSinglePayslipWorkbook(
   ctx: PayslipContext,
 ): Promise<ExcelJS.Workbook> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = ctx.company.name;
-  wb.created = new Date();
-  await addPayslipSheet(wb, row, ctx, "Payslip");
+  await wb.xlsx.load(loadTemplateBuffer());
+
+  const ws = wb.getWorksheet("PAYSLIP");
+  if (!ws) throw new Error('Payslip template is missing its "PAYSLIP" sheet');
+
+  const emp = row.employee;
+  const entry = row.entry;
+  const empName = emp.preferred_name ?? emp.employee_name;
+
+  // ---- Header -------------------------------------------------------------
+  ws.getCell("D3").value = ctx.company.name;
+  ws.getCell("S4").value = emp.employee_code;
+  ws.getCell("E6").value = empName;
+  ws.getCell("E7").value = emp.positions?.name ?? "-";
+  ws.getCell("E8").value = emp.department ?? "-";
+  ws.getCell("P6").value = ctx.payslipDate;
+
+  if (emp.start_date) {
+    const start = new Date(emp.start_date);
+    ws.getCell("P7").value = start;
+    ws.getCell("P8").value = monthsBetween(start, ctx.payslipDate);
+  }
+
+  // ---- Earnings -------------------------------------------------------------
+  // main_salary_idr = basic + position_allowance + skill_grade_increase
+  // (see computeRow in payroll/page.tsx). Position allowance gets its own
+  // line below, so back it out of "Basic Salary" here -- otherwise it would
+  // be counted twice and inflate Gross Salary.
+  const basicLine = entry.main_salary_idr - entry.position_allowance_idr;
+
+  const otherAdj = entry.other_adjustment_idr || 0;
+  const thr = 0; // paid once a year, not tracked per-period yet
+  const pph21 = 0; // TODO: wire up once income tax is added
+
+  ws.getCell("G12").value = basicLine;
+  ws.getCell("G13").value = entry.position_allowance_idr;
+  ws.getCell("G14").value = entry.meal_allowance_idr;
+  ws.getCell("G15").value = entry.overtime_pay_idr;
+  ws.getCell("G16").value = thr;
+  ws.getCell("G17").value = entry.attendance_reward_idr;
+  ws.getCell("G18").value = entry.housing_allowance_idr + Math.max(otherAdj, 0);
+
+  // ---- Deductions -------------------------------------------------------------
+  ws.getCell("S12").value = entry.unexcused_deduction_idr;
+  ws.getCell("S13").value = entry.lateness_deduction_idr;
+  ws.getCell("S14").value = pph21;
+  ws.getCell("S15").value = entry.bpjs_employee_jht_idr;
+  ws.getCell("S16").value = entry.bpjs_employee_jp_idr;
+  ws.getCell("S17").value = 0; // BPJS Kesehatan -- not deducted from employee
+  ws.getCell("S18").value = Math.max(-otherAdj, 0) + entry.loan_repayment_idr;
+
+  // ---- Notes (free text, only filled if there's something to show) -----------
+  if (entry.other_adjustment_note) ws.getCell("C20").value = entry.other_adjustment_note;
+
+  // ---- Bank transfer block ---------------------------------------------------
+  ws.getCell("E31").value = emp.bank ?? "-";
+  ws.getCell("E32").value = emp.bank_account ?? "-";
+  ws.getCell("E33").value = emp.bank_account_name ?? "-";
+
+  // ---- Signature date ---------------------------------------------------------
+  ws.getCell("Q28").value = ctx.payslipDate;
+
+  // AL / DP (I30:L31) intentionally left untouched -- always blank, filled
+  // in by hand, has nothing to do with the loan columns.
+
+  // Totals (E25, P25, E28) are formulas baked into the template -- nothing
+  // to set here, they recalculate from the cells above when the file opens.
+
   return wb;
 }
