@@ -4,6 +4,8 @@ import { buildPayrollSpreadsheet } from "@/lib/exports/spreadsheet";
 import { buildSinglePayslipWorkbook, type CompanyInfo } from "@/lib/exports/payslipExcel";
 import { renderPayslipPdfBuffer } from "@/lib/exports/payslipPdf";
 import type { ExportRow, StoredPayrollEntry, EmployeeForExport } from "@/lib/exports/types";
+import fs from "node:fs";
+import path from "node:path";
 
 const BUCKET = "payroll-exports";
 
@@ -26,9 +28,19 @@ const ENTRY_SELECT = [
 const EMPLOYEE_SELECT =
   "uuid, employee_code, employee_name, preferred_name, department, bank, bank_account, bank_account_name, positions(name)";
 
+function loadLogoBase64(): string | null {
+  try {
+    const logoPath = path.join(process.cwd(), "public", "ikkimo_logo.png");
+    return fs.readFileSync(logoPath).toString("base64");
+  } catch (err) {
+    console.error("[exports] Could not read logo file, generating payslips without a logo:", err);
+    return null;
+  }
+}
+
 const COMPANY: CompanyInfo = {
   name: process.env.PAYSLIP_COMPANY_NAME ?? "PT Luma Tamu Rumah",
-  logoPngBase64: process.env.PAYSLIP_LOGO_BASE64 ?? null,
+  logoPngBase64: loadLogoBase64(),
 };
 
 function safeFileSegment(s: string): string {
