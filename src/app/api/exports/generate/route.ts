@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { buildPayrollSpreadsheet } from "@/lib/exports/spreadsheet";
 import { buildSinglePayslipWorkbook, type CompanyInfo } from "@/lib/exports/payslipExcel";
-import { renderPayslipPdfBuffer } from "@/lib/exports/payslipPdf";
 import type { ExportRow, StoredPayrollEntry, EmployeeForExport } from "@/lib/exports/types";
 import fs from "node:fs";
 import path from "node:path";
@@ -15,18 +14,19 @@ const ENTRY_SELECT = [
   "unexcused_full_days", "unexcused_half_days", "late_minutes_count",
   "loan_repayment_idr", "new_loan_idr",
   "overtime_hours_1", "overtime_hours_2", "overtime_hours_3",
-  "other_adjustment_idr", "other_adjustment_note", "salary_to_pay",
+  "other_adjustment_idr", "other_adjustment_note", "tax_idr", "salary_to_pay",
   "main_salary_idr", "position_allowance_idr", "skill_grade_increase_idr",
   "housing_allowance_idr", "meal_allowance_idr", "meal_eligible_days",
   "attendance_reward_idr", "overtime_pay_idr",
   "unexcused_deduction_idr", "lateness_deduction_idr", "gross_idr",
+  "total_deductions_idr",
   "bpjs_employee_jht_idr", "bpjs_employee_jp_idr",
   "bpjs_company_jht_idr", "bpjs_company_jkm_idr", "bpjs_company_jkk_idr", "bpjs_company_jp_idr",
   "company_bpjs_total_idr", "loan_balance_before_idr", "loan_balance_after_idr",
 ].join(", ");
 
 const EMPLOYEE_SELECT =
-  "uuid, employee_code, employee_name, preferred_name, department, bank, bank_account, bank_account_name, positions(name)";
+  "uuid, employee_code, employee_name, preferred_name, department, start_date, bank, bank_account, bank_account_name, positions(name)";
 
 function loadLogoBase64(): string | null {
   try {
@@ -122,7 +122,6 @@ export async function POST(req: NextRequest) {
 
   const folder = `${period.year}-${String(period.month).padStart(2, "0")}`;
   const payslipDate = new Date();
-  const logoDataUri = COMPANY.logoPngBase64 ? `data:image/png;base64,${COMPANY.logoPngBase64}` : null;
 
   const uploadErrors: string[] = [];
 
@@ -141,7 +140,7 @@ export async function POST(req: NextRequest) {
     uploadErrors.push(`spreadsheet.xlsx: ${err instanceof Error ? err.message : "unknown error"}`);
   }
 
-  // 2. Per-employee payslips (xlsx + pdf)
+  // 2. Per-employee payslips (xlsx)
   for (const row of rows) {
     const codeSafe = safeFileSegment(row.employee.employee_code || row.employee.uuid);
 
@@ -162,26 +161,6 @@ export async function POST(req: NextRequest) {
       if (error) uploadErrors.push(`payslips/${codeSafe}.xlsx: ${error.message}`);
     } catch (err) {
       uploadErrors.push(`payslips/${codeSafe}.xlsx: ${err instanceof Error ? err.message : "unknown error"}`);
-    }
-
-    try {
-      const pdfBuffer = await renderPayslipPdfBuffer({
-        row,
-        company: COMPANY,
-        year: period.year,
-        month: period.month,
-        payslipDate,
-        logoDataUri,
-      });
-      const { error } = await supabaseAdmin.storage
-        .from(BUCKET)
-        .upload(`${folder}/payslips/${codeSafe}.pdf`, pdfBuffer, {
-          contentType: "application/pdf",
-          upsert: true,
-        });
-      if (error) uploadErrors.push(`payslips/${codeSafe}.pdf: ${error.message}`);
-    } catch (err) {
-      uploadErrors.push(`payslips/${codeSafe}.pdf: ${err instanceof Error ? err.message : "unknown error"}`);
     }
   }
 
