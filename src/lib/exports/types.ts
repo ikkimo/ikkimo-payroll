@@ -88,3 +88,11 @@ const INDO_MONTHS = [
 export function monthNameId(m: number) {
   return INDO_MONTHS[m - 1] ?? "";
 }
+
+export function payslipFileName(year: number, month: number, employeeCode: string): string {
+  return `${year}-${String(month).padStart(2, "0")}-${employeeCode}-payslip.xlsx`;
+}
+
+export function payrollOverviewFileName(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2, "0")}-payroll.xlsx`;
+}

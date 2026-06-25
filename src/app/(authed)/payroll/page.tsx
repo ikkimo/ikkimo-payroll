@@ -708,6 +708,19 @@ function PayrollFormPageInner() {
   const isSubmitted = sessionStatus === "submitted";
   const searchParams = useSearchParams();
 
+  const [newPeriodWorkingDays, setNewPeriodWorkingDays] = useState("");
+  const [newPeriodRedDays, setNewPeriodRedDays] = useState("");
+  const [creatingPeriod, setCreatingPeriod] = useState(false);
+  const [periodFormError, setPeriodFormError] = useState<string | null>(null);
+
+  const [editingPeriodDays, setEditingPeriodDays] = useState(false);
+  const [editWorkingDays, setEditWorkingDays] = useState("");
+  const [editRedDays, setEditRedDays] = useState("");
+  const [savingPeriodDays, setSavingPeriodDays] = useState(false);
+
+  const [downloadingAll, setDownloadingAll] = useState(false);
+  const [downloadAllError, setDownloadAllError] = useState<string | null>(null);
+
   // ---------------------------------------------------------------------------
   // Initial load
   // ---------------------------------------------------------------------------
@@ -833,12 +846,23 @@ function PayrollFormPageInner() {
 
       if (!entryRes.error && entryRes.data?.length) {
         for (const entry of entryRes.data) {
+          const excusedFull = entry.excused_full_days ?? 0;
+          const excusedHalf = entry.excused_half_days ?? 0;
+          const unexcusedFull = entry.unexcused_full_days ?? 0;
+          const unexcusedHalf = entry.unexcused_half_days ?? 0;
           freshInputs[entry.employee_uuid] = {
-            full_days_worked: entry.full_days_worked ?? periodDays,
-            excused_full_days: entry.excused_full_days ?? 0,
-            excused_half_days: entry.excused_half_days ?? 0,
-            unexcused_full_days: entry.unexcused_full_days ?? 0,
-            unexcused_half_days: entry.unexcused_half_days ?? 0,
+            // Always re-derived from the period's CURRENT working days,
+            // never trusted from storage — so a working_days correction
+            // stays correct on reload too, not just in the live session
+            // where it was made.
+            full_days_worked: Math.max(
+              0,
+              periodDays - excusedFull - unexcusedFull - excusedHalf * 0.5 - unexcusedHalf * 0.5,
+            ),
+            excused_full_days: excusedFull,
+            excused_half_days: excusedHalf,
+            unexcused_full_days: unexcusedFull,
+            unexcused_half_days: unexcusedHalf,
             late_minutes_count: entry.late_minutes_count ?? 0,
             loan_repayment: entry.loan_repayment_idr ?? 0,
             new_loan: entry.new_loan_idr ?? 0,
@@ -1064,22 +1088,22 @@ function PayrollFormPageInner() {
     .eq("id", period.id)
     .select("id, locked"); // <- forces a real read-back of what was actually updated
 
-  if (statusErr) {
-    console.error("[handleSubmit] Status update failed:", statusErr);
-    setSaveMsg(`Status update failed: ${statusErr.message}`);
-    setSaving(false);
-    return;
-  }
+    if (statusErr) {
+      console.error("[handleSubmit] Status update failed:", statusErr);
+      setSaveMsg(`Status update failed: ${statusErr.message}`);
+      setSaving(false);
+      return;
+    }
 
-  if (!lockedRows || lockedRows.length === 0) {
-    // RLS silently blocked the update — no error, but nothing was changed.
-    console.error("[handleSubmit] Lock update affected 0 rows (likely RLS).");
-    setSaveMsg(
-      "Submit failed: you don't have permission to lock this payroll period. Contact an admin.",
-    );
-    setSaving(false);
-    return;
-  }
+    if (!lockedRows || lockedRows.length === 0) {
+      // RLS silently blocked the update — no error, but nothing was changed.
+      console.error("[handleSubmit] Lock update affected 0 rows (likely RLS).");
+      setSaveMsg(
+        "Submit failed: you don't have permission to lock this payroll period. Contact an admin.",
+      );
+      setSaving(false);
+      return;
+    }
 
     console.log("[handleSubmit] ✅ Submitted successfully");
     setSessionStatus("submitted");
@@ -1118,6 +1142,99 @@ function PayrollFormPageInner() {
     } finally {
       setGeneratingExports(false);
     }
+  }
+
+  async function handleCreatePeriod() {
+    setPeriodFormError(null);
+    const wd = Number(newPeriodWorkingDays);
+    const rd = newPeriodRedDays === "" ? 0 : Number(newPeriodRedDays);
+    if (!newPeriodWorkingDays || !Number.isInteger(wd) || wd <= 0) {
+      setPeriodFormError("Enter a valid number of working days.");
+      return;
+    }
+    if (!Number.isInteger(rd) || rd < 0) {
+      setPeriodFormError("Enter a valid number of red days (0 if none).");
+      return;
+    }
+    setCreatingPeriod(true);
+    const { data, error } = await supabase
+      .from("payroll_periods")
+      .insert({
+        year: selectedYear,
+        month: selectedMonth,
+        working_days: wd,
+        red_days: rd,
+        locked: false,
+      })
+      .select("id, year, month, working_days, red_days, locked")
+      .single();
+    setCreatingPeriod(false);
+
+    if (error || !data) {
+      setPeriodFormError(error?.message || "Could not create this payroll period.");
+      return;
+    }
+
+    const newPeriod = data as PayrollPeriod;
+    setPeriod(newPeriod);
+    setSessionStatus("draft");
+    const freshInputs: Record<string, EmployeeInput> = {};
+    for (const emp of employees) freshInputs[emp.uuid] = blankInput(wd);
+    setInputs(freshInputs);
+    setNewPeriodWorkingDays("");
+    setNewPeriodRedDays("");
+  }
+
+  async function handleSavePeriodDays() {
+    if (!period) return;
+    setPeriodFormError(null);
+    const wd = Number(editWorkingDays);
+    const rd = editRedDays === "" ? 0 : Number(editRedDays);
+    if (!editWorkingDays || !Number.isInteger(wd) || wd <= 0) {
+      setPeriodFormError("Enter a valid number of working days.");
+      return;
+    }
+    if (!Number.isInteger(rd) || rd < 0) {
+      setPeriodFormError("Enter a valid number of red days (0 if none).");
+      return;
+    }
+    setSavingPeriodDays(true);
+    const { error } = await supabase
+      .from("payroll_periods")
+      .update({ working_days: wd, red_days: rd })
+      .eq("id", period.id);
+    setSavingPeriodDays(false);
+
+    if (error) {
+      setPeriodFormError(error.message);
+      return;
+    }
+
+    setPeriod({ ...period, working_days: wd, red_days: rd });
+
+    // Working days changed — recompute full_days_worked for every employee
+    // from the corrected figure, using their already-entered absence
+    // counts, so meal eligibility / attendance reward / gross / net all
+    // immediately reflect the correction instead of the old wrong number.
+    setInputs((prev) => {
+      const next: Record<string, EmployeeInput> = {};
+      for (const [uuid, inp] of Object.entries(prev)) {
+        next[uuid] = {
+          ...inp,
+          full_days_worked: Math.max(
+            0,
+            wd -
+              inp.excused_full_days -
+              inp.unexcused_full_days -
+              inp.excused_half_days * 0.5 -
+              inp.unexcused_half_days * 0.5,
+          ),
+        };
+      }
+      return next;
+    });
+
+    setEditingPeriodDays(false);
   }
 
   // ---------------------------------------------------------------------------
@@ -1166,6 +1283,20 @@ function PayrollFormPageInner() {
     if (!ok) return;
     await handleResetSession();
   }
+
+  async function handleDownloadAll() {
+    if (!period) return;
+    setDownloadAllError(null);
+    setDownloadingAll(true);
+    try {
+      const { downloadAllForPeriod } = await import("@/lib/exports/downloadAll");
+      await downloadAllForPeriod(period.year, period.month);
+    } catch (err) {
+      setDownloadAllError(err instanceof Error ? err.message : "Download failed");
+    } finally {
+      setDownloadingAll(false);
+    }
+}
 
   // ---------------------------------------------------------------------------
   // Render
@@ -1314,21 +1445,94 @@ function PayrollFormPageInner() {
               {period ? (
                 <>
                   {monthName(period.month)} {period.year}
-                  {period.working_days != null && (
-                    <span className="ml-2">
-                      · {period.working_days} working days
+                  {isSubmitted || !editingPeriodDays ? (
+                    <>
+                      {period.working_days != null && (
+                        <span className="ml-2">
+                          · {period.working_days} working days
+                        </span>
+                      )}
+                      {period.red_days != null && (
+                        <span className="ml-2">· {period.red_days} red days</span>
+                      )}
+                      {!isSubmitted && (
+                        <button
+                          onClick={() => {
+                            setEditWorkingDays(String(period.working_days ?? ""));
+                            setEditRedDays(String(period.red_days ?? 0));
+                            setPeriodFormError(null);
+                            setEditingPeriodDays(true);
+                          }}
+                          className="ml-2 text-xs underline text-[var(--ikkimo-brand)]"
+                        >
+                          edit
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <span className="ml-2 inline-flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        value={editWorkingDays}
+                        onChange={(e) => setEditWorkingDays(e.target.value)}
+                        placeholder="Working days"
+                        className="w-24 rounded-md border border-[var(--ikkimo-border)] px-1.5 py-0.5 text-xs outline-none focus:border-[var(--ikkimo-brand)]"
+                      />
+                      <input
+                        type="number"
+                        value={editRedDays}
+                        onChange={(e) => setEditRedDays(e.target.value)}
+                        placeholder="Red days"
+                        className="w-20 rounded-md border border-[var(--ikkimo-border)] px-1.5 py-0.5 text-xs outline-none focus:border-[var(--ikkimo-brand)]"
+                      />
+                      <button
+                        onClick={handleSavePeriodDays}
+                        disabled={savingPeriodDays}
+                        className="rounded-md bg-[var(--ikkimo-brand)] px-2 py-0.5 text-xs font-medium text-white disabled:opacity-50"
+                      >
+                        {savingPeriodDays ? "…" : "Save"}
+                      </button>
+                      <button
+                        onClick={() => setEditingPeriodDays(false)}
+                        className="text-xs text-[var(--ikkimo-text-muted,#888)] underline"
+                      >
+                        cancel
+                      </button>
                     </span>
-                  )}
-                  {period.red_days != null && (
-                    <span className="ml-2">· {period.red_days} red days</span>
                   )}
                 </>
               ) : periodReady ? (
-                "No period configured for this month"
+                <span className="inline-flex items-center gap-1.5">
+                  <span>No period yet for this month — enter:</span>
+                  <input
+                    type="number"
+                    value={newPeriodWorkingDays}
+                    onChange={(e) => setNewPeriodWorkingDays(e.target.value)}
+                    placeholder="Working days"
+                    className="w-24 rounded-md border border-[var(--ikkimo-border)] px-1.5 py-0.5 text-xs outline-none focus:border-[var(--ikkimo-brand)]"
+                  />
+                  <input
+                    type="number"
+                    value={newPeriodRedDays}
+                    onChange={(e) => setNewPeriodRedDays(e.target.value)}
+                    placeholder="Red days"
+                    className="w-20 rounded-md border border-[var(--ikkimo-border)] px-1.5 py-0.5 text-xs outline-none focus:border-[var(--ikkimo-brand)]"
+                  />
+                  <button
+                    onClick={handleCreatePeriod}
+                    disabled={creatingPeriod}
+                    className="rounded-md bg-[var(--ikkimo-brand)] px-2 py-0.5 text-xs font-medium text-white disabled:opacity-50"
+                  >
+                    {creatingPeriod ? "Starting…" : "Start session"}
+                  </button>
+                </span>
               ) : (
                 "Loading…"
               )}
             </div>
+            {periodFormError && (
+              <div className="mt-1 text-xs text-red-600">{periodFormError}</div>
+            )}
           </div>
 
           <div className="flex flex-col items-end gap-2">
@@ -1378,8 +1582,16 @@ function PayrollFormPageInner() {
                   <span className="text-xs text-red-600">{exportsError}</span>
                 )}
                 {isSubmitted ? (
-                  <span className="text-xs text-[var(--ikkimo-text-muted,#888)]">
-                    Payroll submitted — read only
+                  <span className="flex items-center gap-2 text-xs">
+                    <span className="text-[var(--ikkimo-text-muted,#888)]">Payroll submitted — read only</span>
+                    <button
+                      onClick={handleDownloadAll}
+                      disabled={downloadingAll}
+                      className="rounded-lg border border-[var(--ikkimo-border)] px-2 py-1 font-medium hover:border-[var(--ikkimo-brand)] disabled:opacity-50"
+                    >
+                      {downloadingAll ? "Zipping…" : "Download all (.zip)"}
+                    </button>
+                    {downloadAllError && <span className="text-red-600">{downloadAllError}</span>}
                   </span>
                 ) : (
                   <>
@@ -1882,7 +2094,7 @@ function PayrollFormPageInner() {
                       <Td
                         right
                         red
-                      >{`− ${formatIDR(totals.unexcused_deduction + totals.lateness_deduction + totals.bpjs_employee_jht + totals.bpjs_employee_jp + totals.loan_repayment)}`}</Td>
+                      >{`− ${formatIDR(totals.total_deductions)}`}</Td>
                       <Td right>
                         <span className="font-bold">
                           {formatIDR(totals.net_pay)}
