@@ -18,7 +18,6 @@ type PeriodRow = {
 type FileEntry = {
   name: string;
   path: string;
-  downloadName: string;
   kind: "spreadsheet" | "payslip-xlsx";
 };
 
@@ -82,9 +81,8 @@ export default function ExportsPage() {
       for (const f of rootRes.data ?? []) {
         if (f.name === "spreadsheet.xlsx") {
           files.push({
-            name: "Full spreadsheet (.xlsx)",
+            name: payrollOverviewFileName(period.year, period.month),
             path: `${folder}/${f.name}`,
-            downloadName: payrollOverviewFileName(period.year, period.month),
             kind: "spreadsheet",
           });
         }
@@ -94,9 +92,8 @@ export default function ExportsPage() {
         if (f.name.endsWith(".xlsx")) {
           const employeeCode = f.name.replace(/\.xlsx$/, "");
           files.push({
-            name: `${employeeCode} — payslip (.xlsx)`,
+            name: payslipFileName(period.year, period.month, employeeCode),
             path: `${folder}/payslips/${f.name}`,
-            downloadName: payslipFileName(period.year, period.month, employeeCode),
             kind: "payslip-xlsx",
           });
         }
@@ -133,18 +130,20 @@ export default function ExportsPage() {
     try {
       const { data, error } = await supabase.storage
         .from("payroll-exports")
-        .createSignedUrl(file.path, 60);
+        .download(file.path);
 
-      if (error || !data?.signedUrl) {
-        throw new Error(error?.message || "Could not create download link");
+      if (error || !data) {
+        throw new Error(error?.message || "Could not download file");
       }
 
+      const url = URL.createObjectURL(data);
       const a = document.createElement("a");
-      a.href = data.signedUrl;
-      a.download = file.downloadName || file.path.split("/").pop() || "download";
+      a.href = url;
+      a.download = file.name;
       document.body.appendChild(a);
       a.click();
       a.remove();
+      URL.revokeObjectURL(url);
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Download failed");
     } finally {
