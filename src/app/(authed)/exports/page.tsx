@@ -5,7 +5,8 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { monthName } from "@/lib/exports/types";
+import { monthName, payslipFileName, payrollOverviewFileName } from "@/lib/exports/types";
+import { downloadAllForPeriod } from "@/lib/exports/downloadAll";
 
 type PeriodRow = {
   id: string;
@@ -17,7 +18,8 @@ type PeriodRow = {
 type FileEntry = {
   name: string;
   path: string;
-  kind: "spreadsheet" | "payslip-xlsx" | "payslip-pdf";
+  downloadName: string;
+  kind: "spreadsheet" | "payslip-xlsx";
 };
 
 export default function ExportsPage() {
@@ -30,6 +32,7 @@ export default function ExportsPage() {
   const [filesLoading, setFilesLoading] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [downloadingPath, setDownloadingPath] = useState<string | null>(null);
+  const [downloadingAllId, setDownloadingAllId] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -78,15 +81,22 @@ export default function ExportsPage() {
 
       for (const f of rootRes.data ?? []) {
         if (f.name === "spreadsheet.xlsx") {
-          files.push({ name: "Full spreadsheet (.xlsx)", path: `${folder}/${f.name}`, kind: "spreadsheet" });
+          files.push({
+            name: "Full spreadsheet (.xlsx)",
+            path: `${folder}/${f.name}`,
+            downloadName: payrollOverviewFileName(period.year, period.month),
+            kind: "spreadsheet",
+          });
         }
       }
 
       for (const f of payslipsRes.data ?? []) {
         if (f.name.endsWith(".xlsx")) {
+          const employeeCode = f.name.replace(/\.xlsx$/, "");
           files.push({
-            name: `${f.name.replace(/\.xlsx$/, "")} — payslip (.xlsx)`,
+            name: `${employeeCode} — payslip (.xlsx)`,
             path: `${folder}/payslips/${f.name}`,
+            downloadName: payslipFileName(period.year, period.month, employeeCode),
             kind: "payslip-xlsx",
           });
         }
@@ -131,7 +141,7 @@ export default function ExportsPage() {
 
       const a = document.createElement("a");
       a.href = data.signedUrl;
-      a.download = file.path.split("/").pop() || "download";
+      a.download = file.downloadName || file.path.split("/").pop() || "download";
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -139,6 +149,19 @@ export default function ExportsPage() {
       setErrorMsg(err instanceof Error ? err.message : "Download failed");
     } finally {
       setDownloadingPath(null);
+    }
+  }
+
+  async function handleDownloadAll(period: PeriodRow, e: React.MouseEvent) {
+    e.stopPropagation();
+    setErrorMsg(null);
+    setDownloadingAllId(period.id);
+    try {
+      await downloadAllForPeriod(period.year, period.month);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Download failed");
+    } finally {
+      setDownloadingAllId(null);
     }
   }
 
@@ -171,22 +194,34 @@ export default function ExportsPage() {
                 key={period.id}
                 className="rounded-2xl border border-[var(--ikkimo-border)] bg-white"
               >
-                <button
-                  onClick={() => togglePeriodExpanded(period)}
-                  className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
-                >
-                  <div>
+                <div className="flex w-full items-center justify-between gap-4 px-5 py-4">
+                  <button
+                    onClick={() => togglePeriodExpanded(period)}
+                    className="flex-1 text-left"
+                  >
                     <div className="text-sm font-semibold">
                       {monthName(period.month)} {period.year}
                     </div>
                     <div className="text-xs text-[var(--ikkimo-text-muted,#888)]">
                       Submitted
                     </div>
+                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={(e) => handleDownloadAll(period, e)}
+                      disabled={downloadingAllId === period.id}
+                      className="rounded-lg border border-[var(--ikkimo-border)] px-3 py-1 text-xs hover:border-[var(--ikkimo-brand)] disabled:opacity-50"
+                    >
+                      {downloadingAllId === period.id ? "Zipping…" : "Download all (.zip)"}
+                    </button>
+                    <button
+                      onClick={() => togglePeriodExpanded(period)}
+                      className="text-sm text-[var(--ikkimo-text-muted,#888)]"
+                    >
+                      {expanded ? "Hide" : "View files"}
+                    </button>
                   </div>
-                  <span className="text-sm text-[var(--ikkimo-text-muted,#888)]">
-                    {expanded ? "Hide" : "View files"}
-                  </span>
-                </button>
+                </div>
 
                 {expanded && (
                   <div className="border-t border-[var(--ikkimo-border)] px-5 py-4">

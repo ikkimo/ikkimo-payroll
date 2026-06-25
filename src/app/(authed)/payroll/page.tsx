@@ -718,6 +718,9 @@ function PayrollFormPageInner() {
   const [editRedDays, setEditRedDays] = useState("");
   const [savingPeriodDays, setSavingPeriodDays] = useState(false);
 
+  const [downloadingAll, setDownloadingAll] = useState(false);
+  const [downloadAllError, setDownloadAllError] = useState<string | null>(null);
+
   // ---------------------------------------------------------------------------
   // Initial load
   // ---------------------------------------------------------------------------
@@ -1281,6 +1284,20 @@ function PayrollFormPageInner() {
     await handleResetSession();
   }
 
+  async function handleDownloadAll() {
+    if (!period) return;
+    setDownloadAllError(null);
+    setDownloadingAll(true);
+    try {
+      const { downloadAllForPeriod } = await import("@/lib/exports/downloadAll");
+      await downloadAllForPeriod(period.year, period.month);
+    } catch (err) {
+      setDownloadAllError(err instanceof Error ? err.message : "Download failed");
+    } finally {
+      setDownloadingAll(false);
+    }
+}
+
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
@@ -1565,8 +1582,16 @@ function PayrollFormPageInner() {
                   <span className="text-xs text-red-600">{exportsError}</span>
                 )}
                 {isSubmitted ? (
-                  <span className="text-xs text-[var(--ikkimo-text-muted,#888)]">
-                    Payroll submitted — read only
+                  <span className="flex items-center gap-2 text-xs">
+                    <span className="text-[var(--ikkimo-text-muted,#888)]">Payroll submitted — read only</span>
+                    <button
+                      onClick={handleDownloadAll}
+                      disabled={downloadingAll}
+                      className="rounded-lg border border-[var(--ikkimo-border)] px-2 py-1 font-medium hover:border-[var(--ikkimo-brand)] disabled:opacity-50"
+                    >
+                      {downloadingAll ? "Zipping…" : "Download all (.zip)"}
+                    </button>
+                    {downloadAllError && <span className="text-red-600">{downloadAllError}</span>}
                   </span>
                 ) : (
                   <>
@@ -2069,7 +2094,7 @@ function PayrollFormPageInner() {
                       <Td
                         right
                         red
-                      >{`− ${formatIDR(totals.unexcused_deduction + totals.lateness_deduction + totals.bpjs_employee_jht + totals.bpjs_employee_jp + totals.loan_repayment)}`}</Td>
+                      >{`− ${formatIDR(totals.total_deductions)}`}</Td>
                       <Td right>
                         <span className="font-bold">
                           {formatIDR(totals.net_pay)}
