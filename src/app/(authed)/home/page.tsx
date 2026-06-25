@@ -68,6 +68,8 @@ const formatDateEn = (iso: string | null | undefined): string => {
 export default function HomePage() {
   const router = useRouter();
 
+  const { year: currentYear, month: currentMonth } = nowYearMonth();
+
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState<string>("");
   const [employees, setEmployees] = useState<BasicEmployeeRow[]>([]);
@@ -376,7 +378,7 @@ export default function HomePage() {
             href={
               draftSession
                 ? `/payroll?year=${draftSession.year}&month=${draftSession.month}`
-                : "/payroll"
+                : `/payroll?year=${currentYear}&month=${currentMonth}`
             }
             className="mt-4 w-full block text-center rounded-xl bg-[var(--ikkimo-brand)] py-2.5 text-sm font-semibold text-white hover:bg-[var(--ikkimo-brand-hover)]"
           >
