@@ -25,6 +25,8 @@ const ENTRY_SELECT = [
   "company_bpjs_total_idr", "loan_balance_before_idr", "loan_balance_after_idr",
 ].join(", ");
 
+// NOTE: start_date added — the payslip template's "Mulai Bekerja / Date of
+// Joining" and "Lama Bekerja / Length of Service" fields need it.
 const EMPLOYEE_SELECT =
   "uuid, employee_code, employee_name, preferred_name, department, start_date, bank, bank_account, bank_account_name, positions(name)";
 
@@ -54,7 +56,8 @@ function safeFileSegment(s: string): string {
  * Called exactly once, by handleSubmit, right after a payroll period is
  * locked. Reads the just-written payroll_entries breakdown (no
  * calculation happens here — it only ever reads stored columns), builds
- * the full spreadsheet and every employee's payslip (xlsx + pdf), and
+ * the full spreadsheet and every employee's payslip (.xlsx only — PDF
+ * export was removed, the Excel files are the only deliverable now), and
  * uploads them all to Supabase Storage. The Exports page later just lists
  * and signs URLs for whatever this run produced — it never calls this
  * route's calculation path because there isn't one.

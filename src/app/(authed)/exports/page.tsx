@@ -89,12 +89,6 @@ export default function ExportsPage() {
             path: `${folder}/payslips/${f.name}`,
             kind: "payslip-xlsx",
           });
-        } else if (f.name.endsWith(".pdf")) {
-          files.push({
-            name: `${f.name.replace(/\.pdf$/, "")} — payslip (.pdf)`,
-            path: `${folder}/payslips/${f.name}`,
-            kind: "payslip-pdf",
-          });
         }
       }
 
