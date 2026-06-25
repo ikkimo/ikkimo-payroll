@@ -1988,7 +1988,7 @@ function PayrollFormPageInner() {
             </div>
           )}
 
-          {/* ── OTHER ── */}
+          {/* ── TAX & OTHER ── */}
           {view === "other" && (
             <div className="rounded-2xl border border-[var(--ikkimo-border)] bg-white">
               <div className="border-b border-[var(--ikkimo-border)] px-5 py-3">
@@ -2146,6 +2146,25 @@ function PayrollFormPageInner() {
           {/* ── BPJS ── */}
           {view === "bpjs" && (
             <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <SummaryTile
+                  label="Total employee BPJS deductions"
+                  value={formatIDR(
+                    totals.bpjs_employee_jht + totals.bpjs_employee_jp,
+                  )}
+                  hint="JHT + JP — deducted from employee net pay"
+                />
+                <SummaryTile
+                  label="Total company BPJS liability"
+                  value={formatIDR(totals.company_bpjs_total)}
+                  hint="All components including employee share — paid to government"
+                />
+                <SummaryTile
+                  label="Total net pay to employees"
+                  value={formatIDR(totals.net_pay)}
+                  hint="After all deductions"
+                />
+              </div>
               <div className="rounded-2xl border border-[var(--ikkimo-border)] bg-white">
                 <div className="border-b border-[var(--ikkimo-border)] px-5 py-3">
                   <div className="text-sm font-semibold">BPJS breakdown</div>
@@ -2217,25 +2236,6 @@ function PayrollFormPageInner() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <SummaryTile
-                  label="Total employee BPJS deductions"
-                  value={formatIDR(
-                    totals.bpjs_employee_jht + totals.bpjs_employee_jp,
-                  )}
-                  hint="JHT + JP — deducted from employee net pay"
-                />
-                <SummaryTile
-                  label="Total company BPJS liability"
-                  value={formatIDR(totals.company_bpjs_total)}
-                  hint="All components including employee share — paid to government"
-                />
-                <SummaryTile
-                  label="Total net pay to employees"
-                  value={formatIDR(totals.net_pay)}
-                  hint="After all deductions"
-                />
-              </div>
             </div>
           )}
         </>
