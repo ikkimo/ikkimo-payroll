@@ -14,11 +14,12 @@ const ENTRY_SELECT = [
   "unexcused_full_days", "unexcused_half_days", "late_minutes_count",
   "loan_repayment_idr", "new_loan_idr",
   "overtime_hours_1", "overtime_hours_2", "overtime_hours_3",
-  "other_adjustment_idr", "other_adjustment_note", "salary_to_pay",
+  "other_adjustment_idr", "other_adjustment_note", "tax_idr", "salary_to_pay",
   "main_salary_idr", "position_allowance_idr", "skill_grade_increase_idr",
   "housing_allowance_idr", "meal_allowance_idr", "meal_eligible_days",
   "attendance_reward_idr", "overtime_pay_idr",
   "unexcused_deduction_idr", "lateness_deduction_idr", "gross_idr",
+  "total_deductions_idr",
   "bpjs_employee_jht_idr", "bpjs_employee_jp_idr",
   "bpjs_company_jht_idr", "bpjs_company_jkm_idr", "bpjs_company_jkk_idr", "bpjs_company_jp_idr",
   "company_bpjs_total_idr", "loan_balance_before_idr", "loan_balance_after_idr",
@@ -142,7 +143,7 @@ export async function POST(req: NextRequest) {
     uploadErrors.push(`spreadsheet.xlsx: ${err instanceof Error ? err.message : "unknown error"}`);
   }
 
-  // 2. Per-employee payslips (.xlsx only)
+  // 2. Per-employee payslips (xlsx)
   for (const row of rows) {
     const codeSafe = safeFileSegment(row.employee.employee_code || row.employee.uuid);
 

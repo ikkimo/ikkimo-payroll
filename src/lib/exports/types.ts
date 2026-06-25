@@ -25,6 +25,8 @@ export type StoredPayrollEntry = {
   overtime_hours_3: number;
   other_adjustment_idr: number;
   other_adjustment_note: string | null;
+  tax_idr: number;
+  total_deductions_idr: number;
   salary_to_pay: number;
 
   main_salary_idr: number;
@@ -58,7 +60,7 @@ export type EmployeeForExport = {
   bank: string | null;
   bank_account: string | null;
   bank_account_name: string | null;
-  start_date: string | null; // NEW — needed for "Mulai Bekerja" / "Lama Bekerja" on the payslip
+  start_date: string | null;
   positions?: { name: string } | null;
 };
 

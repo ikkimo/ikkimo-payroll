@@ -56,6 +56,7 @@ type EmployeeInput = {
   overtime_hours_3: number;
   other_adjustment_idr: number;
   other_adjustment_note: string;
+  tax_idr: number; // NEW
 };
 
 type PayrollRow = {
@@ -78,6 +79,8 @@ type PayrollRow = {
   new_loan: number;
   projected_loan_balance: number;
   other_adjustment: number;
+  tax: number; // NEW
+  total_deductions: number; // NEW — the one reconciled deductions figure
   bpjs_employee_jht: number;
   bpjs_employee_jp: number;
   bpjs_company_jht: number;
@@ -104,6 +107,7 @@ const blankInput = (stdDays = 21): EmployeeInput => ({
   overtime_hours_3: 0,
   other_adjustment_idr: 0,
   other_adjustment_note: "",
+  tax_idr: 0, // NEW
 });
 
 // ---------------------------------------------------------------------------
@@ -183,35 +187,43 @@ function computeRow(
       : safe(emp.skill_grades?.increase_monthly_idr);
   const seniorityIncrease = safe(emp.seniority_grades?.increase_monthly_idr);
   const housingAllowance = safe(emp.housing_allowance_idr);
+  // "Main salary" = basic + position allowance + skill grade increase.
+  // This is the "current salary" referred to elsewhere — the figure that
+  // unexcused-absence deductions and overtime are based on. BPJS is
+  // deliberately NOT based on this — see below.
   const mainSalary = basic + positionAllowance + skillGradeIncrease;
 
+  // FIX: was (basic / stdDays) — absence deductions are based on main
+  // salary (basic + position allowance + skill grade), not basic alone.
+  // e.g. an unexcused half day = (basic+pos+skill) / standardWorkingDays * 0.5
   const unexcusedEquivalentDays =
     safe(input.unexcused_full_days) + safe(input.unexcused_half_days) * 0.5;
   const unexcusedDeduction = Math.round(
-    (basic / stdDays) * unexcusedEquivalentDays,
+    (mainSalary / stdDays) * unexcusedEquivalentDays,
   );
+
+  // Lateness stays as its own flat, minute-bracket model from Settings —
+  // intentionally unrelated to salary.
   const latenessDeduction = computeLatenessDeduction(
     safe(input.late_minutes_count),
     settings,
   );
-  // Full attendance reward — paid only when there are zero excused AND zero
-  // unexcused absences for the period (equivalent to full_days_worked ===
-  // period working days). Lateness and overtime do not affect eligibility.
+
+  // FIX: attendance reward now also requires zero lateness minutes, in
+  // addition to zero excused and zero unexcused absences. Overtime still
+  // does not affect eligibility.
   const hasPerfectAttendance =
     safe(input.excused_full_days) === 0 &&
     safe(input.excused_half_days) === 0 &&
     safe(input.unexcused_full_days) === 0 &&
-    safe(input.unexcused_half_days) === 0;
+    safe(input.unexcused_half_days) === 0 &&
+    safe(input.late_minutes_count) === 0;
   const attendanceReward = hasPerfectAttendance
     ? safe(settings.attendance_reward_idr) || 100000
     : 0;
 
-  // Overtime — three independent categories (e.g. weekday / weekend /
-  // holiday), each paid at its own multiplier on the same base hourly rate.
-  // Hourly rate derives from main salary (basic + position allowance +
-  // skill grade increase), spread over settings.standard_working_days and
-  // settings.hours_per_day — always the Settings value, never the period's
-  // working_days override.
+  // Overtime — unchanged. Already correctly based on main salary spread
+  // over settings.standard_working_days and settings.hours_per_day.
   const hoursPerDay = safe(settings.hours_per_day) || 8;
   const hourlyRate = mainSalary / (stdDays * hoursPerDay);
   const overtimeMultiplier1 = safe(settings.overtime1_multiplier) || 1.5;
@@ -224,7 +236,6 @@ function computeRow(
         safe(input.overtime_hours_3) * overtimeMultiplier3),
   );
 
-  // const absentDays = safe(input.excused_full_days) + safe(input.unexcused_full_days) + safe(input.excused_half_days) + safe(input.unexcused_half_days);
   const halfDaysCount =
     safe(input.excused_half_days) + safe(input.unexcused_half_days);
   const mealEligibleDays = emp.gets_meal_allowance
@@ -237,24 +248,23 @@ function computeRow(
     mealEligibleDays * safe(settings.meal_allowance_per_day_idr),
   );
 
+  // FIX: Gross is now full earnings BEFORE any deduction — nothing
+  // subtracted here. Unexcused/lateness move down into total_deductions,
+  // so Gross − total_deductions + newLoan + otherAdjustment = Net Pay,
+  // exactly, every time. (Seniority increase still deliberately excluded.)
   const gross =
-    mainSalary +
-    housingAllowance +
-    mealAllowance +
-    attendanceReward +
-    overtimePay -
-    unexcusedDeduction -
-    latenessDeduction; //! removed seniorityIncrease for now
+    mainSalary + housingAllowance + mealAllowance + attendanceReward + overtimePay;
 
-  const bpjsEmpJHT = Math.round(mainSalary * safe(settings.bpjs_employee_jht));
+  // FIX: BPJS is now based on basic alone, not main salary.
+  const bpjsEmpJHT = Math.round(basic * safe(settings.bpjs_employee_jht));
   const bpjsEmpJP = emp.gets_bpjs_jp
-    ? Math.round(mainSalary * safe(settings.bpjs_employee_jp))
+    ? Math.round(basic * safe(settings.bpjs_employee_jp))
     : 0;
-  const bpjsCoJHT = Math.round(mainSalary * safe(settings.bpjs_company_jht));
-  const bpjsCoJKM = Math.round(mainSalary * safe(settings.bpjs_company_jkm));
-  const bpjsCoJKK = Math.round(mainSalary * safe(settings.bpjs_company_jkk));
+  const bpjsCoJHT = Math.round(basic * safe(settings.bpjs_company_jht));
+  const bpjsCoJKM = Math.round(basic * safe(settings.bpjs_company_jkm));
+  const bpjsCoJKK = Math.round(basic * safe(settings.bpjs_company_jkk));
   const bpjsCoJP = emp.gets_bpjs_jp
-    ? Math.round(mainSalary * safe(settings.bpjs_company_jp))
+    ? Math.round(basic * safe(settings.bpjs_company_jp))
     : 0;
 
   const loanBalance = safe(emp.cash_loan_balance_idr);
@@ -262,8 +272,23 @@ function computeRow(
   const newLoan = safe(input.new_loan);
   const projectedLoanBalance = loanBalance - loanRepayment + newLoan;
   const otherAdjustment = safe(input.other_adjustment_idr);
-  const netPay =
-    gross - bpjsEmpJHT - bpjsEmpJP - loanRepayment + newLoan + otherAdjustment;
+  const tax = safe(input.tax_idr); // NEW
+
+  // NEW: the single reconciled "total deductions" figure — every strictly-
+  // subtracted item, nothing double-counted. This is what the Pay Summary
+  // table, the payslip, and the spreadsheet should all display.
+  const totalDeductions =
+    unexcusedDeduction +
+    latenessDeduction +
+    bpjsEmpJHT +
+    bpjsEmpJP +
+    tax +
+    loanRepayment;
+
+  // FIX: net pay now derives from gross and total_deductions directly, so
+  // it always reconciles with what's printed next to it.
+  const netPay = gross - totalDeductions + newLoan + otherAdjustment;
+
   const companyBpjsTotal =
     bpjsCoJHT + bpjsCoJKM + bpjsCoJKK + bpjsCoJP + bpjsEmpJHT + bpjsEmpJP;
 
@@ -287,6 +312,8 @@ function computeRow(
     new_loan: newLoan,
     projected_loan_balance: projectedLoanBalance,
     other_adjustment: otherAdjustment,
+    tax,
+    total_deductions: totalDeductions,
     bpjs_employee_jht: bpjsEmpJHT,
     bpjs_employee_jp: bpjsEmpJP,
     bpjs_company_jht: bpjsCoJHT,
@@ -313,6 +340,8 @@ function sumRows(rows: PayrollRow[]) {
     gross: sum("gross"),
     loan_repayment: sum("loan_repayment"),
     other_adjustment: sum("other_adjustment"),
+    tax: sum("tax"), // NEW
+    total_deductions: sum("total_deductions"), // NEW
     bpjs_employee_jht: sum("bpjs_employee_jht"),
     bpjs_employee_jp: sum("bpjs_employee_jp"),
     bpjs_company_jht: sum("bpjs_company_jht"),
@@ -522,12 +551,18 @@ function BreakdownCard({ row }: { row: PayrollRow }) {
                   red
                 />
               )}
+              {row.tax > 0 && (
+                <Line label="Tax" value={`− ${formatIDR(row.tax)}`} red />
+              )}
               {row.loan_repayment > 0 && (
                 <Line
                   label="Loan repayment"
                   value={`− ${formatIDR(row.loan_repayment)}`}
                   red
                 />
+              )}
+              {row.new_loan > 0 && (
+                <Line label="New loan" value={`+ ${formatIDR(row.new_loan)}`} />
               )}
               {row.other_adjustment !== 0 && (
                 <Line
@@ -542,13 +577,19 @@ function BreakdownCard({ row }: { row: PayrollRow }) {
               )}
               {row.unexcused_deduction === 0 &&
                 row.lateness_deduction === 0 &&
+                row.tax === 0 &&
                 row.loan_repayment === 0 &&
+                row.new_loan === 0 &&
                 row.other_adjustment === 0 && (
                   <div className="text-[var(--ikkimo-text-muted,#aaa)]">
                     No deductions
                   </div>
                 )}
               <div className="mt-1 border-t border-[var(--ikkimo-border)] pt-1">
+                <Line
+                  label="Total deductions"
+                  value={`− ${formatIDR(row.total_deductions)}`}
+                />
                 <Line label="Net pay" value={formatIDR(row.net_pay)} bold />
               </div>
             </div>
@@ -784,7 +825,7 @@ function PayrollFormPageInner() {
       const entryRes = await supabase
         .from("payroll_entries")
         .select(
-          "employee_uuid, full_days_worked, excused_full_days, excused_half_days, unexcused_full_days, unexcused_half_days, late_minutes_count, loan_repayment_idr, new_loan_idr, overtime_hours_1, overtime_hours_2, overtime_hours_3, other_adjustment_idr, other_adjustment_note, salary_to_pay",
+          "employee_uuid, full_days_worked, excused_full_days, excused_half_days, unexcused_full_days, unexcused_half_days, late_minutes_count, loan_repayment_idr, new_loan_idr, overtime_hours_1, overtime_hours_2, overtime_hours_3, other_adjustment_idr, other_adjustment_note, tax_idr, salary_to_pay",
         )
         .eq("period_id", p.id);
 
@@ -806,6 +847,7 @@ function PayrollFormPageInner() {
             overtime_hours_3: entry.overtime_hours_3 ?? 0,
             other_adjustment_idr: entry.other_adjustment_idr ?? 0,
             other_adjustment_note: entry.other_adjustment_note ?? "",
+            tax_idr: entry.tax_idr ?? 0,
           };
         }
       }
@@ -904,6 +946,7 @@ function PayrollFormPageInner() {
         overtime_hours_3: inp.overtime_hours_3,
         other_adjustment_idr: inp.other_adjustment_idr,
         other_adjustment_note: inp.other_adjustment_note || null,
+        tax_idr: inp.tax_idr,
         salary_to_pay: row?.net_pay ?? null,
       };
     });
@@ -965,6 +1008,7 @@ function PayrollFormPageInner() {
         overtime_hours_3: inp.overtime_hours_3,
         other_adjustment_idr: inp.other_adjustment_idr,
         other_adjustment_note: inp.other_adjustment_note || null,
+        tax_idr: inp.tax_idr,
         salary_to_pay: row?.net_pay ?? null,
         // Full breakdown, frozen at submit time. This is what the export
         // routes read — they never recompute pay, only this table.
@@ -979,6 +1023,7 @@ function PayrollFormPageInner() {
         unexcused_deduction_idr: row?.unexcused_deduction ?? 0,
         lateness_deduction_idr: row?.lateness_deduction ?? 0,
         gross_idr: row?.gross ?? 0,
+        total_deductions_idr: row?.total_deductions ?? 0,
         bpjs_employee_jht_idr: row?.bpjs_employee_jht ?? 0,
         bpjs_employee_jp_idr: row?.bpjs_employee_jp ?? 0,
         bpjs_company_jht_idr: row?.bpjs_company_jht ?? 0,
@@ -1053,9 +1098,14 @@ function PayrollFormPageInner() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ period_id: period.id }),
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || `Document generation failed (${res.status})`);
+      const resBody = await res.json().catch(() => ({}));
+      if (!res.ok || res.status === 207) {
+        console.error("[handleSubmit] Export generation errors:", resBody.details);
+        throw new Error(
+          resBody.details?.length
+            ? `Document generation failed: ${resBody.details[0]}${resBody.details.length > 1 ? ` (+${resBody.details.length - 1} more)` : ""}`
+            : resBody.error || `Document generation failed (${res.status})`,
+        );
       }
       console.log("[handleSubmit] ✅ Export documents generated");
     } catch (err) {
@@ -1695,10 +1745,10 @@ function PayrollFormPageInner() {
           {view === "other" && (
             <div className="rounded-2xl border border-[var(--ikkimo-border)] bg-white">
               <div className="border-b border-[var(--ikkimo-border)] px-5 py-3">
-                <div className="text-sm font-semibold">Other adjustment</div>
+                <div className="text-sm font-semibold">Other adjustment &amp; tax</div>
                 <div className="mt-0.5 text-xs text-[var(--ikkimo-text-muted,#666)]">
-                  One-off addition or deduction, applied after everything else. Use a
-                  negative amount to deduct.
+                  &quot;Other&quot; is a one-off addition or deduction, applied after everything
+                  else — use a negative amount to deduct. &quot;Tax&quot; is always a deduction.
                 </div>
               </div>
               <div className="overflow-x-auto">
@@ -1706,8 +1756,9 @@ function PayrollFormPageInner() {
                   <thead className="border-b border-[var(--ikkimo-border)] bg-[var(--ikkimo-surface,#fafafa)]">
                     <tr>
                       <Th>Employee</Th>
-                      <Th right>Amount (IDR)</Th>
+                      <Th right>Other (IDR)</Th>
                       <Th>Note</Th>
+                      <Th right>Tax (IDR)</Th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--ikkimo-border)]">
@@ -1747,6 +1798,16 @@ function PayrollFormPageInner() {
                               className="w-full rounded-md border border-[var(--ikkimo-border)] bg-white px-2 py-1 text-sm outline-none focus:border-[var(--ikkimo-brand)] disabled:cursor-not-allowed disabled:bg-[var(--ikkimo-surface,#f5f5f5)] disabled:opacity-60"
                             />
                           </td>
+                          <td className="border-l border-[var(--ikkimo-border)] px-3 py-2 text-right">
+                            <NumInput
+                              value={inp.tax_idr}
+                              onChange={(v) => updateInput(emp.uuid, "tax_idr", v)}
+                              step={10000}
+                              min={0}
+                              wide
+                              disabled={isSubmitted}
+                            />
+                          </td>
                         </tr>
                       );
                     })}
@@ -1781,12 +1842,7 @@ function PayrollFormPageInner() {
                     {payrollRows.map((row) => {
                       const id = row.employee.uuid;
                       const expanded = expandedId === id;
-                      const totalDeductions =
-                        row.unexcused_deduction +
-                        row.lateness_deduction +
-                        row.bpjs_employee_jht +
-                        row.bpjs_employee_jp +
-                        row.loan_repayment;
+                      const totalDeductions = row.total_deductions;
                       return (
                         <Fragment key={id}>
                           <tr className="hover:bg-[var(--ikkimo-surface,#fafafa)]">
