@@ -137,12 +137,14 @@ function safe(n: number | null | undefined): number {
   return Number.isFinite(n as number) ? (n as number) : 0;
 }
 
-function getDefaultPeriod(endDay: number): { year: number; month: number } {
+// Default period = current calendar month. A stored period (year, month)
+// represents the 25th of the previous month through the 24th of this
+// month, so this naturally stays on, e.g., the May25–June24 period for
+// all of June, and only rolls over to June25–July24 on July 1st. This
+// matches the Home page's "Current period" logic (nowYearMonth()).
+function getDefaultPeriod(): { year: number; month: number } {
   const today = new Date();
-  if (today.getDate() <= endDay)
-    return { year: today.getFullYear(), month: today.getMonth() + 1 };
-  const next = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-  return { year: next.getFullYear(), month: next.getMonth() + 1 };
+  return { year: today.getFullYear(), month: today.getMonth() + 1 };
 }
 
 function computeLatenessDeduction(
@@ -771,8 +773,6 @@ function PayrollFormPageInner() {
       for (const emp of emps) init[emp.uuid] = blankInput(days);
       setInputs(init);
 
-      const endDay = loadedSettings?.payroll_end_date ?? 25;
-
       const yearParam = Number(searchParams.get("year"));
       const monthParam = Number(searchParams.get("month"));
       const hasValidParams =
@@ -783,7 +783,7 @@ function PayrollFormPageInner() {
 
       const { year, month } = hasValidParams
         ? { year: yearParam, month: monthParam }
-        : getDefaultPeriod(endDay);
+        : getDefaultPeriod();
 
       setSelectedYear(year);
       setSelectedMonth(month);
