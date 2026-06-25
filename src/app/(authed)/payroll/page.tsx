@@ -696,7 +696,7 @@ function PayrollFormPageInner() {
   const [inputs, setInputs] = useState<Record<string, EmployeeInput>>({});
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [view, setView] = useState<
-    "attendance" | "loans" | "overtime" | "other" | "summary" | "bpjs"
+    "attendance" | "loans" | "overtime" | "taxOther" | "summary" | "bpjs"
   >("attendance");
 
   const [selectedYear, setSelectedYear] = useState<number>(
@@ -1341,7 +1341,7 @@ function PayrollFormPageInner() {
     attendance: "Attendance",
     loans: "Loans",
     overtime: "Overtime",
-    other: "Other",
+    taxOther: "Tax & Other",
     summary: "Pay summary",
     bpjs: "BPJS",
   };
@@ -1687,7 +1687,7 @@ function PayrollFormPageInner() {
         {/* Tab switcher */}
         <div className="mt-4 flex flex-wrap gap-1 border-t border-[var(--ikkimo-border)] pt-4">
           {(
-            ["attendance", "loans", "overtime", "other", "summary", "bpjs"] as const
+            ["attendance", "loans", "overtime", "taxOther", "summary", "bpjs"] as const
           ).map((v) => (
             <button
               key={v}
@@ -1988,14 +1988,13 @@ function PayrollFormPageInner() {
             </div>
           )}
 
-          {/* ── OTHER ── */}
-          {view === "other" && (
+          {/* ── TAX & OTHER ── */}
+          {view === "taxOther" && (
             <div className="rounded-2xl border border-[var(--ikkimo-border)] bg-white">
               <div className="border-b border-[var(--ikkimo-border)] px-5 py-3">
-                <div className="text-sm font-semibold">Other adjustment &amp; tax</div>
+                <div className="text-sm font-semibold">Tax &amp; other adjustment</div>
                 <div className="mt-0.5 text-xs text-[var(--ikkimo-text-muted,#666)]">
-                  &quot;Other&quot; is a one-off addition or deduction, applied after everything
-                  else — use a negative amount to deduct. &quot;Tax&quot; is always a deduction.
+                  &quot;Tax&quot; is always a deduction. &quot;Other&quot; is a one-off addition or deduction, applied after everything else — use a negative amount to deduct.
                 </div>
               </div>
               <div className="overflow-x-auto">
@@ -2003,9 +2002,9 @@ function PayrollFormPageInner() {
                   <thead className="border-b border-[var(--ikkimo-border)] bg-[var(--ikkimo-surface,#fafafa)]">
                     <tr>
                       <Th>Employee</Th>
+                      <Th right>Tax (IDR)</Th>
                       <Th right>Other (IDR)</Th>
                       <Th>Note</Th>
-                      <Th right>Tax (IDR)</Th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--ikkimo-border)]">
@@ -2017,6 +2016,16 @@ function PayrollFormPageInner() {
                           className="hover:bg-[var(--ikkimo-surface,#fafafa)]"
                         >
                           <EmpCell emp={emp} />
+                          <td className="px-3 py-2 text-right">
+                            <NumInput
+                              value={inp.tax_idr}
+                              onChange={(v) => updateInput(emp.uuid, "tax_idr", v)}
+                              step={10000}
+                              min={0}
+                              wide
+                              disabled={isSubmitted}
+                            />
+                          </td>
                           <td className="px-3 py-2 text-right">
                             <NumInput
                               value={inp.other_adjustment_idr}
@@ -2045,15 +2054,7 @@ function PayrollFormPageInner() {
                               className="w-full rounded-md border border-[var(--ikkimo-border)] bg-white px-2 py-1 text-sm outline-none focus:border-[var(--ikkimo-brand)] disabled:cursor-not-allowed disabled:bg-[var(--ikkimo-surface,#f5f5f5)] disabled:opacity-60"
                             />
                           </td>
-                          <td className="border-l border-[var(--ikkimo-border)] px-3 py-2 text-right">
-                            <NumInput
-                              value={inp.tax_idr}
-                              onChange={(v) => updateInput(emp.uuid, "tax_idr", v)}
-                              step={10000}
-                              min={0}
-                              wide
-                              disabled={isSubmitted}
-                            />
+                          <td className="px-3 py-2 text-right">
                           </td>
                         </tr>
                       );
@@ -2146,6 +2147,25 @@ function PayrollFormPageInner() {
           {/* ── BPJS ── */}
           {view === "bpjs" && (
             <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <SummaryTile
+                  label="Total employee BPJS deductions"
+                  value={formatIDR(
+                    totals.bpjs_employee_jht + totals.bpjs_employee_jp,
+                  )}
+                  hint="JHT + JP — deducted from employee net pay"
+                />
+                <SummaryTile
+                  label="Total company BPJS liability"
+                  value={formatIDR(totals.company_bpjs_total)}
+                  hint="All components including employee share — paid to government"
+                />
+                <SummaryTile
+                  label="Total net pay to employees"
+                  value={formatIDR(totals.net_pay)}
+                  hint="After all deductions"
+                />
+              </div>
               <div className="rounded-2xl border border-[var(--ikkimo-border)] bg-white">
                 <div className="border-b border-[var(--ikkimo-border)] px-5 py-3">
                   <div className="text-sm font-semibold">BPJS breakdown</div>
@@ -2217,25 +2237,6 @@ function PayrollFormPageInner() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <SummaryTile
-                  label="Total employee BPJS deductions"
-                  value={formatIDR(
-                    totals.bpjs_employee_jht + totals.bpjs_employee_jp,
-                  )}
-                  hint="JHT + JP — deducted from employee net pay"
-                />
-                <SummaryTile
-                  label="Total company BPJS liability"
-                  value={formatIDR(totals.company_bpjs_total)}
-                  hint="All components including employee share — paid to government"
-                />
-                <SummaryTile
-                  label="Total net pay to employees"
-                  value={formatIDR(totals.net_pay)}
-                  hint="After all deductions"
-                />
-              </div>
             </div>
           )}
         </>
