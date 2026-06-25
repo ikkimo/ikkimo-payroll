@@ -1070,6 +1070,41 @@ function PayrollFormPageInner() {
       setSaving(false);
       return;
     }
+
+    // ---- Apply loan balance changes to employees (submit-time only) ----
+    const loanUpdates = employees
+      .map((emp) => {
+        const inp = inputs[emp.uuid];
+        if (!inp) return null;
+        const repayment = inp.loan_repayment || 0;
+        const newLoan = inp.new_loan || 0;
+        if (repayment === 0 && newLoan === 0) return null; // nothing to change
+
+        const currentBalance = emp.cash_loan_balance_idr ?? 0;
+        const nextBalance = currentBalance - repayment + newLoan;
+
+        return { uuid: emp.uuid, nextBalance };
+      })
+      .filter((u): u is { uuid: string; nextBalance: number } => u !== null);
+
+    if (loanUpdates.length > 0) {
+      const results = await Promise.all(
+        loanUpdates.map((u) =>
+          supabase
+            .from("employees")
+            .update({ cash_loan_balance_idr: u.nextBalance })
+            .eq("uuid", u.uuid),
+        ),
+      );
+
+      const loanErr = results.find((r) => r.error)?.error;
+      if (loanErr) {
+        console.error("[handleSubmit] Loan balance update failed:", loanErr);
+        setSaveMsg(`Submit failed: ${loanErr.message}`);
+        setSaving(false);
+        return;
+      }
+    }
     //this works but not as good
     // const { error: statusErr } = await supabase
     //   .from("payroll_periods")
