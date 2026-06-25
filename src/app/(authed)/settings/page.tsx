@@ -835,9 +835,7 @@ export default function SettingsPage() {
                   </FieldRow>
                 </FieldRows>
                 <p className="mt-3 text-xs text-[var(--ikkimo-text-muted,#888)]">
-                  Paid in full only when an employee has zero excused and zero
-                  unexcused absences for the period. Lateness and overtime do
-                  not affect eligibility.
+                  Paid in full only when an employee has zero excused absences, zero unexcused absences, and zero lateness minutes for the period. Overtime does not affect eligibility.
                 </p>
               </Card>
 
