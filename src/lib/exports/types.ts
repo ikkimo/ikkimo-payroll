@@ -24,7 +24,8 @@ export type StoredPayrollEntry = {
   overtime_hours_2: number;
   overtime_hours_3: number;
   other_adjustment_idr: number;
-  other_adjustment_note: string | null;
+  other_adjustment_positive_idr: number;
+  other_adjustment_negative_idr: number;
   tax_idr: number;
   total_deductions_idr: number;
   salary_to_pay: number;
