@@ -125,7 +125,9 @@ export async function POST(req: NextRequest) {
   }
 
   const folder = `${period.year}-${String(period.month).padStart(2, "0")}`;
-  const payslipDate = new Date();
+  // Payslip date = last calendar day of the period's month (e.g. period
+  // Aug = 25/07–24/08 → payslip date shows 31/08), not "today".
+  const payslipDate = new Date(period.year, period.month, 0);
 
   const uploadErrors: string[] = [];
 

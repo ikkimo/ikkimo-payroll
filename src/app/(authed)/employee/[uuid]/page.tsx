@@ -28,6 +28,8 @@ type EditableEmployee = BasicEmployeeRow & {
   position_id?: string | null;
   skill_grade_id?: string | null;
   gets_bpjs_jp?: boolean;
+  gets_meal_allowance?: boolean;
+  gets_attendance_reward?: boolean;
 };
 
 const formatDateEn = (iso: string | null | undefined): string => {
@@ -119,8 +121,8 @@ export default function EmployeePage() {
         supabase
           .from("employees")
           .select(
-            "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, gets_bpjs_jp, thr_preference, cash_loan_balance_idr, housing_allowance_idr, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name)",
-          )
+            "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, gets_bpjs_jp, gets_meal_allowance, gets_attendance_reward, thr_preference, cash_loan_balance_idr, housing_allowance_idr, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name)",
+          )          
           .eq("uuid", uuid)
           .maybeSingle(),
         supabase
@@ -267,6 +269,8 @@ export default function EmployeePage() {
       skill_grade_id:
         employee.skill_grade_id ?? employee.skill_grades?.id ?? null,
       gets_bpjs_jp: employee.gets_bpjs_jp,
+      gets_meal_allowance: employee.gets_meal_allowance,
+      gets_attendance_reward: employee.gets_attendance_reward,
       housing_allowance_idr: employee.housing_allowance_idr ?? 0,
       // Do NOT update probation here!
     };
@@ -276,7 +280,7 @@ export default function EmployeePage() {
       .update(payload)
       .eq("uuid", employee.uuid)
       .select(
-        "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, housing_allowance_idr, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name), gets_bpjs_jp",
+              "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, housing_allowance_idr, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name), gets_bpjs_jp, gets_meal_allowance, gets_attendance_reward",
       )
       .maybeSingle();
 
@@ -796,6 +800,58 @@ export default function EmployeePage() {
                     />
                     <span className="text-sm">
                       {employee.gets_bpjs_jp ? "Yes" : "No"}
+                    </span>
+                  </label>
+                )}
+              </div>
+
+              {/* Meal Allowance */}
+              <div>
+                <div className="text-xs font-semibold">
+                  Meal allowance
+                </div>
+                {!editing ? (
+                  <div className="mt-1 text-sm text-gray-500">
+                    {employee.gets_meal_allowance ? "Yes" : "No"}
+                  </div>
+                ) : (
+                  <label className="mt-1 inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={employee.gets_meal_allowance ?? false}
+                      onChange={(e) =>
+                        updateEmployee("gets_meal_allowance", e.target.checked)
+                      }
+                      className="rounded border-[var(--ikkimo-border)] bg-white text-[var(--ikkimo-brand)]"
+                    />
+                    <span className="text-sm">
+                      {employee.gets_meal_allowance ? "Yes" : "No"}
+                    </span>
+                  </label>
+                )}
+              </div>
+
+              {/* Attendance Reward */}
+              <div>
+                <div className="text-xs font-semibold">
+                  Attendance reward
+                </div>
+                {!editing ? (
+                  <div className="mt-1 text-sm text-gray-500">
+                    {employee.gets_attendance_reward ? "Yes" : "No"}
+                  </div>
+                ) : (
+                  <label className="mt-1 inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={employee.gets_attendance_reward ?? false}
+                      onChange={(e) =>
+                        updateEmployee("gets_attendance_reward", e.target.checked)
+                      }
+                      className="rounded border-[var(--ikkimo-border)] bg-white text-[var(--ikkimo-brand)]"
+                    />
+                    <span className="text-sm">
+                      {employee.gets_attendance_reward ? "Yes" : "No"}
                     </span>
                   </label>
                 )}
