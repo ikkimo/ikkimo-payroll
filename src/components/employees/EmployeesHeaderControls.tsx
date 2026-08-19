@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import Link from "next/link";
 import { BasicEmployeeRow, EmployeeSortKey, SORT_OPTIONS } from "./types";
 
 type Props = {
@@ -36,7 +37,15 @@ export default function EmployeesHeaderControls({
   return (
     <div className="border-b border-[var(--ikkimo-border)] px-5 py-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div className="text-sm font-semibold">Employees</div>
+        <div className="flex items-center gap-3">
+          <div className="text-sm font-semibold">Employees</div>
+          <Link
+            href="/employee/new"
+            className="rounded-lg bg-[var(--ikkimo-brand)] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[var(--ikkimo-brand-hover)]"
+          >
+            + Add employee
+          </Link>
+        </div>
 
         <div className="flex w-full flex-col items-stretch sm:w-auto sm:items-end">
           <label className="flex w-full items-center gap-2 text-xs sm:w-auto">
