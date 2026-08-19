@@ -29,6 +29,7 @@ type EmployeeForPayroll = BasicEmployeeRow & {
   basic?: number | null;
   position_id?: string | null;
   skill_grade_id?: string | null;
+  gets_attendance_reward?: boolean | null;
   gets_bpjs_jp?: boolean | null;
   cash_loan_balance_idr?: number | null;
   positions?: { id: string; name: string; allowance_idr: number } | null;
@@ -222,9 +223,10 @@ function computeRow(
     safe(input.unexcused_full_days) === 0 &&
     safe(input.unexcused_half_days) === 0 &&
     safe(input.late_minutes_count) === 0;
-  const attendanceReward = hasPerfectAttendance
-    ? safe(settings.attendance_reward_idr) || 100000
-    : 0;
+  const attendanceReward =
+    emp.gets_attendance_reward && hasPerfectAttendance
+      ? safe(settings.attendance_reward_idr) || 100000
+      : 0;
 
   // Overtime — unchanged. Already correctly based on main salary spread
   // over settings.standard_working_days and settings.hours_per_day.
@@ -754,7 +756,7 @@ function PayrollFormPageInner() {
         supabase
           .from("employees")
           .select(
-            "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, basic, probation, position_id, skill_grade_id, gets_bpjs_jp, cash_loan_balance_idr, housing_allowance_idr, gets_meal_allowance, thr_preference, positions:positions!employees_position_id_fkey(id, name, allowance_idr), skill_grades:skill_grades!employees_skill_grade_id_fkey(id, level, increase_monthly_idr), seniority_grades:seniority_grades!employees_seniority_grade_id_fkey(id, grade, increase_monthly_idr)",
+            "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, basic, probation, position_id, skill_grade_id, gets_bpjs_jp, gets_attendance_reward, cash_loan_balance_idr, housing_allowance_idr, gets_meal_allowance, thr_preference, positions:positions!employees_position_id_fkey(id, name, allowance_idr), skill_grades:skill_grades!employees_skill_grade_id_fkey(id, level, increase_monthly_idr), seniority_grades:seniority_grades!employees_seniority_grade_id_fkey(id, grade, increase_monthly_idr)",
           )
           .eq("active", true)
           .order("internal_no", { ascending: true })
