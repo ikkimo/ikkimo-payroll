@@ -92,7 +92,8 @@ export async function buildSinglePayslipWorkbook(
   ws.getCell("G14").value = entry.meal_allowance_idr;
   ws.getCell("G15").value = entry.overtime_pay_idr;
   ws.getCell("G17").value = entry.attendance_reward_idr;
-  // G16 (THR) and G18 (Others) intentionally left blank — not tracked yet.
+  ws.getCell("G18").value = entry.other_adjustment_positive_idr || undefined;
+  // G16 (THR) intentionally left blank — not tracked yet.
 
   // ---- Deductions (S12:S18) -------------------------------------------------
   ws.getCell("S12").value = entry.unexcused_deduction_idr;
@@ -100,7 +101,10 @@ export async function buildSinglePayslipWorkbook(
   ws.getCell("S14").value = entry.tax_idr; // NEW — the actual point of this pass
   ws.getCell("S15").value = entry.bpjs_employee_jht_idr;
   ws.getCell("S16").value = entry.bpjs_employee_jp_idr;
-  // S17 (BPJS Kesehatan) and S18 (Others) intentionally left blank.
+  ws.getCell("S18").value = entry.other_adjustment_negative_idr
+    ? Math.abs(entry.other_adjustment_negative_idr)
+    : undefined;
+  // S17 (BPJS Kesehatan) intentionally left blank.
 
   // ---- Bold totals — exact stored numbers, not the template's formulas ----
   ws.getCell("E25").value = entry.gross_idr;
