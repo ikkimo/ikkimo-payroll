@@ -815,6 +815,20 @@ function PayrollFormPageInner() {
     };
   }, []);
 
+
+  // Only employees whose start_date falls on/before the last day of the
+  // selected period's month are eligible for that period. An employee
+  // hired mid-month is still included for that month's session; someone
+  // hired later never appears in an earlier, already-closed period.
+  const periodEmployees = useMemo(() => {
+    const periodEnd = new Date(selectedYear, selectedMonth, 0); // last day of selectedMonth
+    periodEnd.setHours(23, 59, 59, 999);
+    return employees.filter((emp) => {
+      if (!emp.start_date) return true; // no start_date on file — don't hide them silently
+      return new Date(emp.start_date).getTime() <= periodEnd.getTime();
+    });
+  }, [employees, selectedYear, selectedMonth]);
+
   // ---------------------------------------------------------------------------
   // Period fetch + load saved entries if draft exists
   // ---------------------------------------------------------------------------
@@ -841,7 +855,7 @@ function PayrollFormPageInner() {
 
       // Always reset ALL employees to this period's working days first
       const freshInputs: Record<string, EmployeeInput> = {};
-      for (const emp of employees) {
+      for (const emp of periodEmployees) {
         freshInputs[emp.uuid] = blankInput(periodDays);
       }
 
@@ -901,14 +915,11 @@ function PayrollFormPageInner() {
     return () => {
       alive = false;
     };
-  }, [selectedYear, selectedMonth, periodReady, stdDays, employees]);
+  }, [selectedYear, selectedMonth, periodReady, stdDays, periodEmployees]);
 
-  // ---------------------------------------------------------------------------
-  // Derived rows
-  // ---------------------------------------------------------------------------
   const payrollRows = useMemo<PayrollRow[]>(() => {
     if (!settings) return [];
-    return employees.map((emp) =>
+    return periodEmployees.map((emp) =>
       computeRow(
         emp,
         inputs[emp.uuid] ?? blankInput(period?.working_days ?? stdDays),
@@ -916,7 +927,7 @@ function PayrollFormPageInner() {
         period?.working_days ?? settings.standard_working_days ?? stdDays,
       ),
     );
-  }, [employees, inputs, settings, period, stdDays]);
+  }, [periodEmployees, inputs, settings, period, stdDays]);
 
   const totals = useMemo(() => sumRows(payrollRows), [payrollRows]);
 
@@ -982,7 +993,7 @@ function PayrollFormPageInner() {
     setSaving(true);
     setSaveMsg(null);
 
-    const upsertRows = employees.map((emp) => {
+    const upsertRows = periodEmployees.map((emp) => {
       const inp =
         inputs[emp.uuid] ?? blankInput(period.working_days ?? stdDays);
       const row = payrollRows.find((r) => r.employee.uuid === emp.uuid);
@@ -1043,7 +1054,7 @@ function PayrollFormPageInner() {
     setShowSubmitModal(false);
     setExportsError(null);
 
-    const upsertRows = employees.map((emp) => {
+    const upsertRows = periodEmployees.map((emp) => {
       const inp =
         inputs[emp.uuid] ?? blankInput(period.working_days ?? stdDays);
       const row = payrollRows.find((r) => r.employee.uuid === emp.uuid);
@@ -1108,7 +1119,7 @@ function PayrollFormPageInner() {
     }
 
     // ---- Apply loan balance changes to employees (submit-time only) ----
-    const loanUpdates = employees
+    const loanUpdates = periodEmployees
       .map((emp) => {
         const inp = inputs[emp.uuid];
         if (!inp) return null;
@@ -1250,7 +1261,7 @@ function PayrollFormPageInner() {
     setPeriod(newPeriod);
     setSessionStatus("draft");
     const freshInputs: Record<string, EmployeeInput> = {};
-    for (const emp of employees) freshInputs[emp.uuid] = blankInput(wd);
+    for (const emp of periodEmployees) freshInputs[emp.uuid] = blankInput(wd);
     setInputs(freshInputs);
     setNewPeriodWorkingDays("");
     setNewPeriodRedDays("");
@@ -1339,7 +1350,7 @@ function PayrollFormPageInner() {
 
     const periodDays = period.working_days ?? stdDays;
     const blanked: Record<string, EmployeeInput> = {};
-    for (const emp of employees) {
+    for (const emp of periodEmployees) {
       blanked[emp.uuid] = blankInput(periodDays);
     }
     setInputs(blanked);
@@ -1752,7 +1763,7 @@ function PayrollFormPageInner() {
         <div className="rounded-2xl border border-[var(--ikkimo-border)] bg-white p-6 text-sm">
           No payroll settings found.
         </div>
-      ) : employees.length === 0 ? (
+      ) : periodEmployees.length === 0 ? (
         <div className="rounded-2xl border border-[var(--ikkimo-border)] bg-white p-6 text-sm">
           No active employees found.
         </div>
@@ -1810,7 +1821,7 @@ function PayrollFormPageInner() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--ikkimo-border)]">
-                    {employees.map((emp) => {
+                    {periodEmployees.map((emp) => {
                       const inp =
                         inputs[emp.uuid] ??
                         blankInput(period?.working_days ?? stdDays);
@@ -1980,7 +1991,7 @@ function PayrollFormPageInner() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--ikkimo-border)]">
-                    {employees.map((emp) => {
+                    {periodEmployees.map((emp) => {
                       const inp = inputs[emp.uuid] ?? blankInput(stdDays);
                       return (
                         <tr
@@ -2043,7 +2054,7 @@ function PayrollFormPageInner() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--ikkimo-border)]">
-                    {employees.map((emp) => {
+                    {periodEmployees.map((emp) => {
                       const inp = inputs[emp.uuid] ?? blankInput(stdDays);
                       return (
                         <tr
