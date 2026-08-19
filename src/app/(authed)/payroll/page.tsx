@@ -14,6 +14,8 @@ import { useSearchParams } from "next/navigation";
 // Types
 // ---------------------------------------------------------------------------
 
+type OtherItem = { id: string; description: string; amount_idr: number };
+
 type PayrollPeriod = {
   id: string;
   year: number;
@@ -54,8 +56,7 @@ type EmployeeInput = {
   overtime_hours_1: number;
   overtime_hours_2: number;
   overtime_hours_3: number;
-  other_adjustment_idr: number;
-  other_adjustment_note: string;
+  other_items: OtherItem[];
   tax_idr: number; // NEW
 };
 
@@ -79,6 +80,8 @@ type PayrollRow = {
   new_loan: number;
   projected_loan_balance: number;
   other_adjustment: number;
+  other_adjustment_positive: number;
+  other_adjustment_negative: number;
   tax: number; // NEW
   total_deductions: number; // NEW — the one reconciled deductions figure
   bpjs_employee_jht: number;
@@ -105,9 +108,8 @@ const blankInput = (stdDays = 21): EmployeeInput => ({
   overtime_hours_1: 0,
   overtime_hours_2: 0,
   overtime_hours_3: 0,
-  other_adjustment_idr: 0,
-  other_adjustment_note: "",
-  tax_idr: 0, // NEW
+  other_items: [],
+  tax_idr: 0,
 });
 
 // ---------------------------------------------------------------------------
@@ -273,7 +275,16 @@ function computeRow(
   const loanRepayment = safe(input.loan_repayment);
   const newLoan = safe(input.new_loan);
   const projectedLoanBalance = loanBalance - loanRepayment + newLoan;
-  const otherAdjustment = safe(input.other_adjustment_idr);
+
+  const otherItems = input.other_items ?? [];
+  const otherPositive = otherItems
+    .filter((i) => safe(i.amount_idr) > 0)
+    .reduce((acc, i) => acc + safe(i.amount_idr), 0);
+  const otherNegative = otherItems
+    .filter((i) => safe(i.amount_idr) < 0)
+    .reduce((acc, i) => acc + safe(i.amount_idr), 0); // stays negative
+  const otherAdjustment = otherPositive + otherNegative; // net, unchanged formula below
+
   const tax = safe(input.tax_idr); // NEW
 
   // NEW: the single reconciled "total deductions" figure — every strictly-
@@ -314,6 +325,8 @@ function computeRow(
     new_loan: newLoan,
     projected_loan_balance: projectedLoanBalance,
     other_adjustment: otherAdjustment,
+    other_adjustment_positive: otherPositive,
+    other_adjustment_negative: otherNegative,
     tax,
     total_deductions: totalDeductions,
     bpjs_employee_jht: bpjsEmpJHT,
@@ -342,8 +355,10 @@ function sumRows(rows: PayrollRow[]) {
     gross: sum("gross"),
     loan_repayment: sum("loan_repayment"),
     other_adjustment: sum("other_adjustment"),
-    tax: sum("tax"), // NEW
-    total_deductions: sum("total_deductions"), // NEW
+    other_adjustment_positive: sum("other_adjustment_positive"),
+    other_adjustment_negative: sum("other_adjustment_negative"),
+    tax: sum("tax"),
+    total_deductions: sum("total_deductions"),
     bpjs_employee_jht: sum("bpjs_employee_jht"),
     bpjs_employee_jp: sum("bpjs_employee_jp"),
     bpjs_company_jht: sum("bpjs_company_jht"),
@@ -566,15 +581,17 @@ function BreakdownCard({ row }: { row: PayrollRow }) {
               {row.new_loan > 0 && (
                 <Line label="New loan" value={`+ ${formatIDR(row.new_loan)}`} />
               )}
-              {row.other_adjustment !== 0 && (
+              {row.other_adjustment_positive > 0 && (
                 <Line
-                  label="Other adjustment"
-                  value={
-                    row.other_adjustment > 0
-                      ? `+ ${formatIDR(row.other_adjustment)}`
-                      : `− ${formatIDR(Math.abs(row.other_adjustment))}`
-                  }
-                  red={row.other_adjustment < 0}
+                  label="Other additions"
+                  value={`+ ${formatIDR(row.other_adjustment_positive)}`}
+                />
+              )}
+              {row.other_adjustment_negative < 0 && (
+                <Line
+                  label="Other deductions"
+                  value={`− ${formatIDR(Math.abs(row.other_adjustment_negative))}`}
+                  red
                 />
               )}
               {row.unexcused_deduction === 0 &&
@@ -582,7 +599,8 @@ function BreakdownCard({ row }: { row: PayrollRow }) {
                 row.tax === 0 &&
                 row.loan_repayment === 0 &&
                 row.new_loan === 0 &&
-                row.other_adjustment === 0 && (
+                row.other_adjustment_positive === 0 &&
+                row.other_adjustment_negative === 0 && (
                   <div className="text-[var(--ikkimo-text-muted,#aaa)]">
                     No deductions
                   </div>
@@ -838,7 +856,7 @@ function PayrollFormPageInner() {
       const entryRes = await supabase
         .from("payroll_entries")
         .select(
-          "employee_uuid, full_days_worked, excused_full_days, excused_half_days, unexcused_full_days, unexcused_half_days, late_minutes_count, loan_repayment_idr, new_loan_idr, overtime_hours_1, overtime_hours_2, overtime_hours_3, other_adjustment_idr, other_adjustment_note, tax_idr, salary_to_pay",
+          "employee_uuid, full_days_worked, excused_full_days, excused_half_days, unexcused_full_days, unexcused_half_days, late_minutes_count, loan_repayment_idr, new_loan_idr, overtime_hours_1, overtime_hours_2, overtime_hours_3, other_items, tax_idr, salary_to_pay",
         )
         .eq("period_id", p.id);
 
@@ -869,8 +887,7 @@ function PayrollFormPageInner() {
             overtime_hours_1: entry.overtime_hours_1 ?? 0,
             overtime_hours_2: entry.overtime_hours_2 ?? 0,
             overtime_hours_3: entry.overtime_hours_3 ?? 0,
-            other_adjustment_idr: entry.other_adjustment_idr ?? 0,
-            other_adjustment_note: entry.other_adjustment_note ?? "",
+            other_items: entry.other_items ?? [],
             tax_idr: entry.tax_idr ?? 0,
           };
         }
@@ -904,7 +921,7 @@ function PayrollFormPageInner() {
   function updateInput(
     uuid: string,
     key: keyof EmployeeInput,
-    value: number | string,
+    value: number | string | OtherItem[],
   ) {
     setInputs((prev) => {
       const current = prev[uuid] ?? blankInput(period?.working_days ?? stdDays);
@@ -929,6 +946,22 @@ function PayrollFormPageInner() {
 
       return { ...prev, [uuid]: updated };
     });
+  }
+
+  function addOtherItem(uuid: string) {
+    updateInput(uuid, "other_items", [
+      ...(inputs[uuid]?.other_items ?? []),
+      { id: crypto.randomUUID(), description: "", amount_idr: 0 },
+    ]);
+  }
+  function updateOtherItem(uuid: string, idx: number, field: "description" | "amount_idr", value: string | number) {
+    const items = [...(inputs[uuid]?.other_items ?? [])];
+    items[idx] = { ...items[idx], [field]: value };
+    updateInput(uuid, "other_items", items);
+  }
+  function removeOtherItem(uuid: string, idx: number) {
+    const items = (inputs[uuid]?.other_items ?? []).filter((_, i) => i !== idx);
+    updateInput(uuid, "other_items", items);
   }
 
   // ---------------------------------------------------------------------------
@@ -968,8 +1001,7 @@ function PayrollFormPageInner() {
         overtime_hours_1: inp.overtime_hours_1,
         overtime_hours_2: inp.overtime_hours_2,
         overtime_hours_3: inp.overtime_hours_3,
-        other_adjustment_idr: inp.other_adjustment_idr,
-        other_adjustment_note: inp.other_adjustment_note || null,
+        other_items: inp.other_items,
         tax_idr: inp.tax_idr,
         salary_to_pay: row?.net_pay ?? null,
       };
@@ -1030,8 +1062,10 @@ function PayrollFormPageInner() {
         overtime_hours_1: inp.overtime_hours_1,
         overtime_hours_2: inp.overtime_hours_2,
         overtime_hours_3: inp.overtime_hours_3,
-        other_adjustment_idr: inp.other_adjustment_idr,
-        other_adjustment_note: inp.other_adjustment_note || null,
+        other_items: inp.other_items,
+        other_adjustment_idr: row?.other_adjustment ?? 0,
+        other_adjustment_positive_idr: row?.other_adjustment_positive ?? 0,
+        other_adjustment_negative_idr: row?.other_adjustment_negative ?? 0,
         tax_idr: inp.tax_idr,
         salary_to_pay: row?.net_pay ?? null,
         // Full breakdown, frozen at submit time. This is what the export
@@ -2003,8 +2037,7 @@ function PayrollFormPageInner() {
                     <tr>
                       <Th>Employee</Th>
                       <Th right>Tax (IDR)</Th>
-                      <Th right>Other (IDR)</Th>
-                      <Th>Note</Th>
+                      <Th>Other (description + amount)</Th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--ikkimo-border)]">
@@ -2026,35 +2059,36 @@ function PayrollFormPageInner() {
                               disabled={isSubmitted}
                             />
                           </td>
-                          <td className="px-3 py-2 text-right">
-                            <NumInput
-                              value={inp.other_adjustment_idr}
-                              onChange={(v) =>
-                                updateInput(emp.uuid, "other_adjustment_idr", v)
-                              }
-                              step={10000}
-                              min={-999999999}
-                              wide
-                              disabled={isSubmitted}
-                            />
-                          </td>
                           <td className="px-3 py-2">
-                            <input
-                              type="text"
-                              value={inp.other_adjustment_note}
-                              onChange={(e) =>
-                                updateInput(
-                                  emp.uuid,
-                                  "other_adjustment_note",
-                                  e.target.value,
-                                )
-                              }
-                              disabled={isSubmitted}
-                              placeholder="e.g. bonus, correction, fine"
-                              className="w-full rounded-md border border-[var(--ikkimo-border)] bg-white px-2 py-1 text-sm outline-none focus:border-[var(--ikkimo-brand)] disabled:cursor-not-allowed disabled:bg-[var(--ikkimo-surface,#f5f5f5)] disabled:opacity-60"
-                            />
-                          </td>
-                          <td className="px-3 py-2 text-right">
+                            <div className="space-y-1">
+                              {inp.other_items.map((item, idx) => (
+                                <div key={item.id} className="flex items-center gap-1">
+                                  <input
+                                    type="text"
+                                    value={item.description}
+                                    onChange={(e) => updateOtherItem(emp.uuid, idx, "description", e.target.value)}
+                                    placeholder="Description"
+                                    disabled={isSubmitted}
+                                    className="w-32 rounded border border-[var(--ikkimo-border)] px-1.5 py-0.5 text-xs"
+                                  />
+                                  <NumInput
+                                    value={item.amount_idr}
+                                    onChange={(v) => updateOtherItem(emp.uuid, idx, "amount_idr", v)}
+                                    step={10000}
+                                    min={-999999999}
+                                    disabled={isSubmitted}
+                                  />
+                                  {!isSubmitted && (
+                                    <button onClick={() => removeOtherItem(emp.uuid, idx)} className="text-xs text-red-500">×</button>
+                                  )}
+                                </div>
+                              ))}
+                              {!isSubmitted && (
+                                <button onClick={() => addOtherItem(emp.uuid)} className="text-xs text-[var(--ikkimo-brand)]">
+                                  + Add item
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
