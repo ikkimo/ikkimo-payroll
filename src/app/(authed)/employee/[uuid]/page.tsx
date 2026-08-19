@@ -30,6 +30,8 @@ type EditableEmployee = BasicEmployeeRow & {
   gets_bpjs_jp?: boolean;
   gets_meal_allowance?: boolean;
   gets_attendance_reward?: boolean;
+  end_date?: string | null;
+  employment_status?: "active" | "resigned" | "terminated" | null;
 };
 
 const formatDateEn = (iso: string | null | undefined): string => {
@@ -88,6 +90,13 @@ export default function EmployeePage() {
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [confirmProbationOpen, setConfirmProbationOpen] = useState(false);
 
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const [leaveStatus, setLeaveStatus] = useState<"resigned" | "terminated">("resigned");
+  const [leaveEndDate, setLeaveEndDate] = useState(""); // no default — must be chosen
+  const [leavePassword, setLeavePassword] = useState("");
+  const [leaveError, setLeaveError] = useState<string | null>(null);
+  const [leaveSaving, setLeaveSaving] = useState(false);
+
   const [positions, setPositions] = useState<PositionRow[]>([]);
   const [skillGrades, setSkillGrades] = useState<SkillGradeRow[]>([]);
 
@@ -121,7 +130,7 @@ export default function EmployeePage() {
         supabase
           .from("employees")
           .select(
-            "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, gets_bpjs_jp, gets_meal_allowance, gets_attendance_reward, thr_preference, cash_loan_balance_idr, housing_allowance_idr, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name)",
+            "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, gets_bpjs_jp, gets_meal_allowance, gets_attendance_reward, thr_preference, cash_loan_balance_idr, housing_allowance_idr, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name), end_date, employment_status",
           )          
           .eq("uuid", uuid)
           .maybeSingle(),
@@ -280,7 +289,7 @@ export default function EmployeePage() {
       .update(payload)
       .eq("uuid", employee.uuid)
       .select(
-              "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, housing_allowance_idr, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name), gets_bpjs_jp, gets_meal_allowance, gets_attendance_reward",
+              "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, housing_allowance_idr, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name), gets_bpjs_jp, gets_meal_allowance, gets_attendance_reward, end_date, employment_status",
       )
       .maybeSingle();
 
@@ -296,6 +305,55 @@ export default function EmployeePage() {
     setDirty(false);
     setSaving(false);
     setSavedMsg("Saved.");
+  }
+
+  function openLeaveModal() {
+    setLeaveOpen(true);
+    setLeaveStatus("resigned");
+    setLeaveEndDate("");
+    setLeavePassword("");
+    setLeaveError(null);
+  }
+
+  async function confirmMarkAsLeft() {
+    if (!employee) return;
+    setLeaveError(null);
+
+    if (!leaveEndDate) {
+      setLeaveError("Last working day is required.");
+      return;
+    }
+
+    setLeaveSaving(true);
+
+    const result = await verifyCurrentUserPassword(leavePassword);
+    if (!result.ok) {
+      setLeaveError(result.error);
+      setLeaveSaving(false);
+      return;
+    }
+
+    const res = await supabase
+      .from("employees")
+      .update({
+        active: false,
+        employment_status: leaveStatus,
+        end_date: leaveEndDate,
+      })
+      .eq("uuid", employee.uuid)
+      .select("uuid, active, employment_status, end_date")
+      .maybeSingle();
+
+    setLeaveSaving(false);
+
+    if (res.error) {
+      setLeaveError(res.error.message);
+      return;
+    }
+
+    setLeaveOpen(false);
+    setLeavePassword("");
+    router.replace("/home");
   }
 
   async function toggleProbation() {
@@ -474,6 +532,12 @@ export default function EmployeePage() {
                     payrollSettings,
                   ) ?? "missing"}
                 </div>
+                {!employee.active && (
+                  <div className="mt-1 text-xs text-red-600">
+                    {capitalizeFirst(employee.employment_status)} — last day{" "}
+                    {formatDateEn(employee.end_date)}
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center gap-2">
@@ -481,8 +545,19 @@ export default function EmployeePage() {
 
                 {!editing ? (
                   <>
+                    {employee.active ? (
+                      <button
+                        onClick={openLeaveModal}
+                        className="rounded-xl border border-red-200 bg-white px-3 py-1.5 text-sm text-red-600 hover:border-red-400"
+                        title="End this employee's employment"
+                      >
+                        End employment
+                      </button>
+                    ) : null}
+
                     {employee.probation ? (
                       <>
+                        
                         <button
                           onClick={handleProbationClick}
                           disabled={probationSaving}
@@ -893,7 +968,116 @@ export default function EmployeePage() {
           }}
         />
       ) : null}
+      {leaveOpen ? (
+        <MarkAsLeftModal
+          status={leaveStatus}
+          setStatus={setLeaveStatus}
+          endDate={leaveEndDate}
+          setEndDate={(v) => {
+            setLeaveEndDate(v);
+            setLeaveError(null);
+          }}
+          password={leavePassword}
+          setPassword={(v) => {
+            setLeavePassword(v);
+            setLeaveError(null);
+          }}
+          error={leaveError}
+          saving={leaveSaving}
+          onCancel={() => {
+            setLeaveOpen(false);
+            setLeavePassword("");
+            setLeaveError(null);
+          }}
+          onConfirm={confirmMarkAsLeft}
+        />
+      ) : null}
     </>
+  );
+}
+
+function MarkAsLeftModal(props: {
+  status: "resigned" | "terminated";
+  setStatus: (v: "resigned" | "terminated") => void;
+  endDate: string;
+  setEndDate: (v: string) => void;
+  password: string;
+  setPassword: (v: string) => void;
+  error: string | null;
+  saving: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const { status, setStatus, endDate, setEndDate, password, setPassword, error, saving, onCancel, onConfirm } = props;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4" aria-modal="true" role="dialog">
+      <button className="absolute inset-0 bg-black/30" aria-label="Close" onClick={onCancel} />
+
+      <div className="relative w-full max-w-lg rounded-2xl border border-[var(--ikkimo-border)] bg-white p-6 shadow-lg">
+        <div className="text-lg font-semibold text-red-600">End employment</div>
+        <div className="mt-2 text-sm">
+          This employee will be hidden from the main list. They&apos;ll still be
+          available for payroll in their leaving month and the month after,
+          for any residual pay, then no longer appear in payroll sessions.
+        </div>
+
+        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label className="block">
+            <div className="text-xs font-semibold">Reason</div>
+            <select
+              className="mt-1 w-full rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
+              value={status}
+              onChange={(e) => setStatus(e.target.value as "resigned" | "terminated")}
+            >
+              <option value="resigned">Resigned</option>
+              <option value="terminated">Terminated</option>
+            </select>
+          </label>
+
+          <label className="block">
+            <div className="text-xs font-semibold">Last working day *</div>
+            <input
+              type="date"
+              className="mt-1 w-full rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </label>
+        </div>
+
+        <div className="mt-5 rounded-xl border border-[var(--ikkimo-border)] p-4">
+          <div className="text-xs font-semibold">Confirm with your password</div>
+          <input
+            className="mt-2 w-full rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            autoComplete="current-password"
+          />
+        </div>
+
+        {error ? (
+          <div className="mt-4 text-sm">
+            Error: <span className="font-medium">{error}</span>
+          </div>
+        ) : null}
+
+        <div className="mt-6 flex items-center justify-end gap-3">
+          <button onClick={onCancel} className="rounded-xl border border-[var(--ikkimo-border)] bg-white px-4 py-2 text-sm hover:border-[var(--ikkimo-brand)]">
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={saving}
+            className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {saving ? "Saving…" : "Confirm"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
