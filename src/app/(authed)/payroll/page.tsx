@@ -33,6 +33,8 @@ type EmployeeForPayroll = BasicEmployeeRow & {
   gets_bpjs_jp?: boolean | null;
   cash_loan_balance_idr?: number | null;
   positions?: { id: string; name: string; allowance_idr: number } | null;
+  end_date?: string | null;
+  employment_status?: string | null;
   skill_grades?: {
     id: string;
     level: number | null;
@@ -756,9 +758,8 @@ function PayrollFormPageInner() {
         supabase
           .from("employees")
           .select(
-            "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, basic, probation, position_id, skill_grade_id, gets_bpjs_jp, gets_attendance_reward, cash_loan_balance_idr, housing_allowance_idr, gets_meal_allowance, thr_preference, positions:positions!employees_position_id_fkey(id, name, allowance_idr), skill_grades:skill_grades!employees_skill_grade_id_fkey(id, level, increase_monthly_idr), seniority_grades:seniority_grades!employees_seniority_grade_id_fkey(id, grade, increase_monthly_idr)",
+            "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, end_date, employment_status, active, basic, probation, position_id, skill_grade_id, gets_bpjs_jp, gets_attendance_reward, cash_loan_balance_idr, housing_allowance_idr, gets_meal_allowance, thr_preference, positions:positions!employees_position_id_fkey(id, name, allowance_idr), skill_grades:skill_grades!employees_skill_grade_id_fkey(id, level, increase_monthly_idr), seniority_grades:seniority_grades!employees_seniority_grade_id_fkey(id, grade, increase_monthly_idr)",
           )
-          .eq("active", true)
           .order("internal_no", { ascending: true })
           .limit(500),
         supabase
@@ -821,11 +822,25 @@ function PayrollFormPageInner() {
   // hired mid-month is still included for that month's session; someone
   // hired later never appears in an earlier, already-closed period.
   const periodEmployees = useMemo(() => {
-    const periodEnd = new Date(selectedYear, selectedMonth, 0); // last day of selectedMonth
+    const periodEnd = new Date(selectedYear, selectedMonth, 0);
     periodEnd.setHours(23, 59, 59, 999);
+    const periodIndex = selectedYear * 12 + selectedMonth;
+
     return employees.filter((emp) => {
-      if (!emp.start_date) return true; // no start_date on file — don't hide them silently
-      return new Date(emp.start_date).getTime() <= periodEnd.getTime();
+      if (emp.start_date) {
+        const start = new Date(emp.start_date);
+        if (start.getTime() > periodEnd.getTime()) return false;
+      }
+
+      if (emp.active) return true;
+
+      // Inactive: only eligible for their leaving month + one grace month
+      // after, so residual pay (unpaid overtime, loan repayment, etc.) can
+      // still be run once they're off the main list.
+      if (!emp.end_date) return false;
+      const end = new Date(emp.end_date);
+      const endIndex = end.getFullYear() * 12 + (end.getMonth() + 1);
+      return periodIndex >= endIndex && periodIndex <= endIndex + 1;
     });
   }, [employees, selectedYear, selectedMonth]);
 
