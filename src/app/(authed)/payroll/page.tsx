@@ -772,6 +772,9 @@ function PayrollFormPageInner() {
   const [downloadingAll, setDownloadingAll] = useState(false);
   const [downloadAllError, setDownloadAllError] = useState<string | null>(null);
 
+  const [previewing, setPreviewing] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+
   // ---------------------------------------------------------------------------
   // Initial load
   // ---------------------------------------------------------------------------
@@ -1472,6 +1475,22 @@ function PayrollFormPageInner() {
     }
 }
 
+  async function handlePreview() {
+    if (payrollRows.length === 0) return;
+    setPreviewError(null);
+    setPreviewing(true);
+    try {
+      const { downloadPreviewSpreadsheet } = await import(
+        "@/lib/exports/previewSpreadsheet"
+      );
+      await downloadPreviewSpreadsheet(payrollRows, selectedYear, selectedMonth);
+    } catch (err) {
+      setPreviewError(err instanceof Error ? err.message : "Preview failed");
+    } finally {
+      setPreviewing(false);
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
@@ -1883,6 +1902,23 @@ function PayrollFormPageInner() {
                     >
                       Reset session
                     </button>
+
+                    {/* Preview button */}
+                    <button
+                      onClick={handlePreview}
+                      disabled={previewing || !period || payrollRows.length === 0}
+                      title={
+                        !period
+                          ? "No payroll period configured for this month"
+                          : undefined
+                      }
+                      className="rounded-xl border border-[var(--ikkimo-border)] px-4 py-1.5 text-sm hover:border-[var(--ikkimo-brand)] disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {previewing ? "Building…" : "Preview spreadsheet"}
+                    </button>
+                    {previewError && (
+                      <span className="text-xs text-red-600">{previewError}</span>
+                    )}
 
                     {/* Save button */}
                     <button
