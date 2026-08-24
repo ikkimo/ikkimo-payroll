@@ -28,6 +28,7 @@ type EditableEmployee = BasicEmployeeRow & {
   position_id?: string | null;
   skill_grade_id?: string | null;
   gets_bpjs_jp?: boolean;
+  gets_bpjs_kesehatan?: boolean;
   gets_meal_allowance?: boolean;
   gets_attendance_reward?: boolean;
   end_date?: string | null;
@@ -130,7 +131,7 @@ export default function EmployeePage() {
         supabase
           .from("employees")
           .select(
-            "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, gets_bpjs_jp, gets_meal_allowance, gets_attendance_reward, thr_preference, cash_loan_balance_idr, housing_allowance_idr, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name), end_date, employment_status",
+            "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, gets_bpjs_jp, gets_bpjs_kesehatan, gets_meal_allowance, gets_attendance_reward, thr_preference, cash_loan_balance_idr, housing_allowance_idr, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name), end_date, employment_status",
           )          
           .eq("uuid", uuid)
           .maybeSingle(),
@@ -278,6 +279,7 @@ export default function EmployeePage() {
       skill_grade_id:
         employee.skill_grade_id ?? employee.skill_grades?.id ?? null,
       gets_bpjs_jp: employee.gets_bpjs_jp,
+      gets_bpjs_kesehatan: employee.gets_bpjs_kesehatan,
       gets_meal_allowance: employee.gets_meal_allowance,
       gets_attendance_reward: employee.gets_attendance_reward,
       housing_allowance_idr: employee.housing_allowance_idr ?? 0,
@@ -289,7 +291,7 @@ export default function EmployeePage() {
       .update(payload)
       .eq("uuid", employee.uuid)
       .select(
-              "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, housing_allowance_idr, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name), gets_bpjs_jp, gets_meal_allowance, gets_attendance_reward, end_date, employment_status",
+              "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, housing_allowance_idr, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name), gets_bpjs_jp, gets_bpjs_kesehatan, gets_meal_allowance, gets_attendance_reward, end_date, employment_status",
       )
       .maybeSingle();
 
@@ -857,7 +859,7 @@ export default function EmployeePage() {
               {/* Receives Pension */}
               <div>
                 <div className="text-xs font-semibold">
-                  Receives Pension (BPJS - JP)
+                  Receives BPJS - JP
                 </div>
                 {!editing ? (
                   <div className="mt-1 text-sm text-gray-500">
@@ -875,6 +877,32 @@ export default function EmployeePage() {
                     />
                     <span className="text-sm">
                       {employee.gets_bpjs_jp ? "Yes" : "No"}
+                    </span>
+                  </label>
+                )}
+              </div>
+
+              {/* BPJS Kesehatan */}
+              <div>
+                <div className="text-xs font-semibold">
+                  Receives BPJS Kesehatan
+                </div>
+                {!editing ? (
+                  <div className="mt-1 text-sm text-gray-500">
+                    {employee.gets_bpjs_kesehatan ? "Yes" : "No"}
+                  </div>
+                ) : (
+                  <label className="mt-1 inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={employee.gets_bpjs_kesehatan ?? false}
+                      onChange={(e) =>
+                        updateEmployee("gets_bpjs_kesehatan", e.target.checked)
+                      }
+                      className="rounded border-[var(--ikkimo-border)] bg-white text-[var(--ikkimo-brand)]"
+                    />
+                    <span className="text-sm">
+                      {employee.gets_bpjs_kesehatan ? "Yes" : "No"}
                     </span>
                   </label>
                 )}

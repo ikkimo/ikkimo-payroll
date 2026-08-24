@@ -5,11 +5,12 @@ export type PayrollSettingsRow = {
 
   bpjs_employee_jht: number;
   bpjs_employee_jp: number;
-
+  bpjs_employee_kesehatan: number;
   bpjs_company_jht: number;
   bpjs_company_jkm: number;
   bpjs_company_jkk: number;
   bpjs_company_jp: number;
+  bpjs_company_kesehatan: number;
 
   overtime1_multiplier: number;
   overtime2_multiplier: number;

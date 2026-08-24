@@ -15,8 +15,9 @@
 // entry.total_deductions_idr, entry.salary_to_pay), overriding the
 // template's own SUM/subtraction formulas, so they're guaranteed correct.
 //
-// Per product decision: only income tax is wired up this pass. THR, BPJS
-// Kesehatan, and the "Lainnya / Others" lines stay blank, same as today.
+// Per product decision: only income tax is wired up this pass. THR and the
+// "Lainnya / Others" lines stay blank, same as today. BPJS Kesehatan is now
+// wired to S17.
 // Loan repayment / new loan / other adjustment have no line on this
 // document yet — deferred. The "AL / DP" table near the bottom is
 // unrelated to the loan columns and is filled in by hand.
@@ -101,10 +102,10 @@ export async function buildSinglePayslipWorkbook(
   ws.getCell("S14").value = entry.tax_idr; // NEW — the actual point of this pass
   ws.getCell("S15").value = entry.bpjs_employee_jht_idr;
   ws.getCell("S16").value = entry.bpjs_employee_jp_idr;
+  ws.getCell("S17").value = entry.bpjs_employee_kesehatan_idr || undefined;
   ws.getCell("S18").value = entry.other_adjustment_negative_idr
     ? Math.abs(entry.other_adjustment_negative_idr)
     : undefined;
-  // S17 (BPJS Kesehatan) intentionally left blank.
 
   // ---- Bold totals — exact stored numbers, not the template's formulas ----
   ws.getCell("E25").value = entry.gross_idr;
