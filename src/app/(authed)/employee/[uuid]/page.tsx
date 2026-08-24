@@ -30,6 +30,7 @@ type EditableEmployee = BasicEmployeeRow & {
   gets_bpjs_jp?: boolean;
   gets_bpjs_kesehatan?: boolean;
   gets_meal_allowance?: boolean;
+  meal_allowance_override_idr?: number | null;
   gets_attendance_reward?: boolean;
   end_date?: string | null;
   employment_status?: "active" | "resigned" | "terminated" | null;
@@ -131,7 +132,7 @@ export default function EmployeePage() {
         supabase
           .from("employees")
           .select(
-            "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, gets_bpjs_jp, gets_bpjs_kesehatan, gets_meal_allowance, gets_attendance_reward, thr_preference, cash_loan_balance_idr, housing_allowance_idr, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name), end_date, employment_status",
+            "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, gets_bpjs_jp, gets_bpjs_kesehatan, gets_meal_allowance, meal_allowance_override_idr, gets_attendance_reward, thr_preference, cash_loan_balance_idr, housing_allowance_idr, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name), end_date, employment_status",
           )          
           .eq("uuid", uuid)
           .maybeSingle(),
@@ -281,6 +282,7 @@ export default function EmployeePage() {
       gets_bpjs_jp: employee.gets_bpjs_jp,
       gets_bpjs_kesehatan: employee.gets_bpjs_kesehatan,
       gets_meal_allowance: employee.gets_meal_allowance,
+      meal_allowance_override_idr: employee.meal_allowance_override_idr ?? null,
       gets_attendance_reward: employee.gets_attendance_reward,
       housing_allowance_idr: employee.housing_allowance_idr ?? 0,
       // Do NOT update probation here!
@@ -291,7 +293,7 @@ export default function EmployeePage() {
       .update(payload)
       .eq("uuid", employee.uuid)
       .select(
-              "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, housing_allowance_idr, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name), gets_bpjs_jp, gets_bpjs_kesehatan, gets_meal_allowance, gets_attendance_reward, end_date, employment_status",
+              "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, housing_allowance_idr, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name), gets_bpjs_jp, gets_bpjs_kesehatan, gets_meal_allowance, meal_allowance_override_idr, gets_attendance_reward, end_date, employment_status",
       )
       .maybeSingle();
 
@@ -931,6 +933,45 @@ export default function EmployeePage() {
                       {employee.gets_meal_allowance ? "Yes" : "No"}
                     </span>
                   </label>
+                )}
+              </div>
+
+              {/* Fixed meal allowance override */}
+              <div>
+                <div className="text-xs font-semibold">
+                  Fixed meal allowance (IDR / month)
+                </div>
+                {!editing ? (
+                  <div className="mt-1 text-sm text-gray-500">
+                    {employee.meal_allowance_override_idr != null
+                      ? `${formatIDR(employee.meal_allowance_override_idr)} — overrides normal calculation`
+                      : "Not set — uses normal per-day calculation"}
+                  </div>
+                ) : (
+                  <div className="mt-1 flex items-center gap-2">
+                    <input
+                      className="w-full rounded-xl border border-[var(--ikkimo-border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
+                      type="number"
+                      placeholder="Leave blank for normal calculation"
+                      value={
+                        employee.meal_allowance_override_idr != null
+                          ? String(employee.meal_allowance_override_idr)
+                          : ""
+                      }
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        if (raw === "") {
+                          updateEmployee("meal_allowance_override_idr", null);
+                          return;
+                        }
+                        const n = Number(raw);
+                        updateEmployee(
+                          "meal_allowance_override_idr",
+                          Number.isFinite(n) ? n : null,
+                        );
+                      }}
+                    />
+                  </div>
                 )}
               </div>
 

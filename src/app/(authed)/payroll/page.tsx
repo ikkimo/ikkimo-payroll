@@ -32,6 +32,7 @@ type EmployeeForPayroll = BasicEmployeeRow & {
   gets_attendance_reward?: boolean | null;
   gets_bpjs_jp?: boolean | null;
   gets_bpjs_kesehatan?: boolean | null;
+  meal_allowance_override_idr?: number | null;
   cash_loan_balance_idr?: number | null;
   positions?: { id: string; name: string; allowance_idr: number } | null;
   end_date?: string | null;
@@ -255,9 +256,15 @@ function computeRow(
         Math.floor(safe(input.full_days_worked) - halfDaysCount * 0.5),
       )
     : 0;
-  const mealAllowance = Math.round(
-    mealEligibleDays * safe(settings.meal_allowance_per_day_idr),
-  );
+  // A fixed monthly override, when set on the employee, replaces the
+  // per-day calculation entirely — flat amount every period, regardless
+  // of days worked or gets_meal_allowance.
+  const hasMealOverride =
+    emp.meal_allowance_override_idr !== null &&
+    emp.meal_allowance_override_idr !== undefined;
+  const mealAllowance = hasMealOverride
+    ? safe(emp.meal_allowance_override_idr)
+    : Math.round(mealEligibleDays * safe(settings.meal_allowance_per_day_idr));
 
   // FIX: Gross is now full earnings BEFORE any deduction — nothing
   // subtracted here. Unexcused/lateness move down into total_deductions,
@@ -788,7 +795,7 @@ function PayrollFormPageInner() {
         supabase
           .from("employees")
           .select(
-            "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, end_date, employment_status, active, basic, probation, position_id, skill_grade_id, gets_bpjs_jp, gets_bpjs_kesehatan, gets_attendance_reward, cash_loan_balance_idr, housing_allowance_idr, gets_meal_allowance, thr_preference, positions:positions!employees_position_id_fkey(id, name, allowance_idr), skill_grades:skill_grades!employees_skill_grade_id_fkey(id, level, increase_monthly_idr), seniority_grades:seniority_grades!employees_seniority_grade_id_fkey(id, grade, increase_monthly_idr)",
+            "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, end_date, employment_status, active, basic, probation, position_id, skill_grade_id, gets_bpjs_jp, gets_bpjs_kesehatan, gets_attendance_reward, cash_loan_balance_idr, housing_allowance_idr, gets_meal_allowance, meal_allowance_override_idr, thr_preference, positions:positions!employees_position_id_fkey(id, name, allowance_idr), skill_grades:skill_grades!employees_skill_grade_id_fkey(id, level, increase_monthly_idr), seniority_grades:seniority_grades!employees_seniority_grade_id_fkey(id, grade, increase_monthly_idr)",
           )
           .order("internal_no", { ascending: true })
           .limit(500),
