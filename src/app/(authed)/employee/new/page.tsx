@@ -47,6 +47,7 @@ type NewEmployeeForm = {
   cash_loan_balance_idr: string;
 
   gets_bpjs_jp: boolean;
+  gets_bpjs_kesehatan: boolean;
   gets_meal_allowance: boolean;
   gets_attendance_reward: boolean;
 
@@ -80,6 +81,7 @@ const EMPTY_FORM: NewEmployeeForm = {
   cash_loan_balance_idr: "0",
 
   gets_bpjs_jp: true,
+  gets_bpjs_kesehatan: false,
   gets_meal_allowance: true,
   gets_attendance_reward: true,
 
@@ -307,6 +309,7 @@ export default function NewEmployeePage() {
       cash_loan_balance_idr: Number(form.cash_loan_balance_idr) || 0,
 
       gets_bpjs_jp: form.gets_bpjs_jp,
+      gets_bpjs_kesehatan: form.gets_bpjs_kesehatan,
       gets_meal_allowance: form.gets_meal_allowance,
       gets_attendance_reward: form.gets_attendance_reward,
 
@@ -689,6 +692,14 @@ export default function NewEmployeePage() {
                   onChange={(e) => update("gets_bpjs_jp", e.target.checked)}
                 />
                 Enrolled in BPJS JP
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.gets_bpjs_kesehatan}
+                  onChange={(e) => update("gets_bpjs_kesehatan", e.target.checked)}
+                />
+                Enrolled in BPJS Kesehatan
               </label>
               <label className="flex items-center gap-2 text-sm">
                 <input

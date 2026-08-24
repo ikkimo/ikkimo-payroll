@@ -43,10 +43,12 @@ export type StoredPayrollEntry = {
   gross_idr: number;
   bpjs_employee_jht_idr: number;
   bpjs_employee_jp_idr: number;
+  bpjs_employee_kesehatan_idr: number;
   bpjs_company_jht_idr: number;
   bpjs_company_jkm_idr: number;
   bpjs_company_jkk_idr: number;
   bpjs_company_jp_idr: number;
+  bpjs_company_kesehatan_idr: number;
   company_bpjs_total_idr: number;
   loan_balance_before_idr: number;
   loan_balance_after_idr: number;

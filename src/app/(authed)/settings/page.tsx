@@ -22,10 +22,12 @@ const SETTINGS_SELECT = [
   "meal_allowance_per_day_idr",
   "bpjs_employee_jht",
   "bpjs_employee_jp",
+  "bpjs_employee_kesehatan",
   "bpjs_company_jht",
   "bpjs_company_jkm",
   "bpjs_company_jkk",
   "bpjs_company_jp",
+  "bpjs_company_kesehatan",
   "overtime1_multiplier",
   "overtime2_multiplier",
   "overtime3_multiplier",
@@ -934,6 +936,15 @@ export default function SettingsPage() {
                       onChange={(v) => updateField("bpjs_employee_jp", v)}
                     />
                   </FieldRow>
+                  <FieldRow label="Kesehatan">
+                    <NumIn
+                      value={row.bpjs_employee_kesehatan}
+                      step={0.001}
+                      min={0}
+                      disabled={!editing}
+                      onChange={(v) => updateField("bpjs_employee_kesehatan", v)}
+                    />
+                  </FieldRow>
                 </FieldRows>
                 <p className="mt-3 text-xs text-[var(--ikkimo-text-muted,#888)]">
                   Enter as decimals — 2% = 0.02
@@ -976,6 +987,15 @@ export default function SettingsPage() {
                       min={0}
                       disabled={!editing}
                       onChange={(v) => updateField("bpjs_company_jp", v)}
+                    />
+                  </FieldRow>
+                  <FieldRow label="Kesehatan">
+                    <NumIn
+                      value={row.bpjs_company_kesehatan}
+                      step={0.001}
+                      min={0}
+                      disabled={!editing}
+                      onChange={(v) => updateField("bpjs_company_kesehatan", v)}
                     />
                   </FieldRow>
                 </FieldRows>
