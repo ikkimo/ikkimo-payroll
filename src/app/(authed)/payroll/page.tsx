@@ -33,6 +33,7 @@ type EmployeeForPayroll = BasicEmployeeRow & {
   gets_bpjs_jp?: boolean | null;
   gets_bpjs_kesehatan?: boolean | null;
   meal_allowance_override_idr?: number | null;
+  basic_salary_only?: boolean | null;
   cash_loan_balance_idr?: number | null;
   positions?: { id: string; name: string; allowance_idr: number } | null;
   end_date?: string | null;
@@ -190,14 +191,18 @@ function computeRow(
   // outside this function) and, by extension, attendance-reward
   // eligibility follow the period-specific working days.
   const stdDays = safe(settings.standard_working_days) || 21;
+  const basicOnlyMode = emp.basic_salary_only === true;
   const basic = safe(emp.basic);
-  const positionAllowance = safe(emp.positions?.allowance_idr);
-  const skillGradeIncrease =
-    safe(emp.skill_grades?.level) <= 1
+  const positionAllowance = basicOnlyMode ? 0 : safe(emp.positions?.allowance_idr);
+  const skillGradeIncrease = basicOnlyMode
+    ? 0
+    : safe(emp.skill_grades?.level) <= 1
       ? 0
       : safe(emp.skill_grades?.increase_monthly_idr);
-  const seniorityIncrease = safe(emp.seniority_grades?.increase_monthly_idr);
-  const housingAllowance = safe(emp.housing_allowance_idr);
+  const seniorityIncrease = basicOnlyMode
+    ? 0
+    : safe(emp.seniority_grades?.increase_monthly_idr);
+  const housingAllowance = basicOnlyMode ? 0 : safe(emp.housing_allowance_idr);
   // "Main salary" = basic + position allowance + skill grade increase.
   // This is the "current salary" referred to elsewhere — the figure that
   // unexcused-absence deductions and overtime are based on. BPJS is
@@ -209,16 +214,15 @@ function computeRow(
   // e.g. an unexcused half day = (basic+pos+skill) / standardWorkingDays * 0.5
   const unexcusedEquivalentDays =
     safe(input.unexcused_full_days) + safe(input.unexcused_half_days) * 0.5;
-  const unexcusedDeduction = Math.round(
-    (mainSalary / stdDays) * unexcusedEquivalentDays,
-  );
+  const unexcusedDeduction = basicOnlyMode
+    ? 0
+    : Math.round((mainSalary / stdDays) * unexcusedEquivalentDays);
 
   // Lateness stays as its own flat, minute-bracket model from Settings —
   // intentionally unrelated to salary.
-  const latenessDeduction = computeLatenessDeduction(
-    safe(input.late_minutes_count),
-    settings,
-  );
+  const latenessDeduction = basicOnlyMode
+    ? 0
+    : computeLatenessDeduction(safe(input.late_minutes_count), settings);
 
   // FIX: attendance reward now also requires zero lateness minutes, in
   // addition to zero excused and zero unexcused absences. Overtime still
@@ -230,7 +234,7 @@ function computeRow(
     safe(input.unexcused_half_days) === 0 &&
     safe(input.late_minutes_count) === 0;
   const attendanceReward =
-    emp.gets_attendance_reward && hasPerfectAttendance
+    !basicOnlyMode && emp.gets_attendance_reward && hasPerfectAttendance
       ? safe(settings.attendance_reward_idr) || 100000
       : 0;
 
@@ -241,12 +245,14 @@ function computeRow(
   const overtimeMultiplier1 = safe(settings.overtime1_multiplier) || 1.5;
   const overtimeMultiplier2 = safe(settings.overtime2_multiplier) || 2.0;
   const overtimeMultiplier3 = safe(settings.overtime3_multiplier) || 3.0;
-  const overtimePay = Math.round(
-    hourlyRate *
-      (safe(input.overtime_hours_1) * overtimeMultiplier1 +
-        safe(input.overtime_hours_2) * overtimeMultiplier2 +
-        safe(input.overtime_hours_3) * overtimeMultiplier3),
-  );
+  const overtimePay = basicOnlyMode
+    ? 0
+    : Math.round(
+        hourlyRate *
+          (safe(input.overtime_hours_1) * overtimeMultiplier1 +
+            safe(input.overtime_hours_2) * overtimeMultiplier2 +
+            safe(input.overtime_hours_3) * overtimeMultiplier3),
+      );
 
   const halfDaysCount =
     safe(input.excused_half_days) + safe(input.unexcused_half_days);
@@ -262,9 +268,11 @@ function computeRow(
   const hasMealOverride =
     emp.meal_allowance_override_idr !== null &&
     emp.meal_allowance_override_idr !== undefined;
-  const mealAllowance = hasMealOverride
-    ? safe(emp.meal_allowance_override_idr)
-    : Math.round(mealEligibleDays * safe(settings.meal_allowance_per_day_idr));
+  const mealAllowance = basicOnlyMode
+    ? 0
+    : hasMealOverride
+      ? safe(emp.meal_allowance_override_idr)
+      : Math.round(mealEligibleDays * safe(settings.meal_allowance_per_day_idr));
 
   // FIX: Gross is now full earnings BEFORE any deduction — nothing
   // subtracted here. Unexcused/lateness move down into total_deductions,
@@ -274,26 +282,40 @@ function computeRow(
     mainSalary + housingAllowance + mealAllowance + attendanceReward + overtimePay;
 
   // FIX: BPJS is now based on basic alone, not main salary.
-  const bpjsEmpJHT = Math.round(basic * safe(settings.bpjs_employee_jht));
-  const bpjsEmpJP = emp.gets_bpjs_jp
-    ? Math.round(basic * safe(settings.bpjs_employee_jp))
-    : 0;
-  const bpjsCoJHT = Math.round(basic * safe(settings.bpjs_company_jht));
-  const bpjsCoJKM = Math.round(basic * safe(settings.bpjs_company_jkm));
-  const bpjsCoJKK = Math.round(basic * safe(settings.bpjs_company_jkk));
-  const bpjsCoJP = emp.gets_bpjs_jp
-    ? Math.round(basic * safe(settings.bpjs_company_jp))
-    : 0;
-  const bpjsEmpKesehatan = emp.gets_bpjs_kesehatan
-    ? Math.round(basic * safe(settings.bpjs_employee_kesehatan))
-    : 0;
-  const bpjsCoKesehatan = emp.gets_bpjs_kesehatan
-    ? Math.round(basic * safe(settings.bpjs_company_kesehatan))
-    : 0;
+  // basicOnlyMode employees get zero BPJS across the board, regardless of
+  // their individual gets_bpjs_jp / gets_bpjs_kesehatan toggles.
+  const bpjsEmpJHT = basicOnlyMode
+    ? 0
+    : Math.round(basic * safe(settings.bpjs_employee_jht));
+  const bpjsEmpJP =
+    !basicOnlyMode && emp.gets_bpjs_jp
+      ? Math.round(basic * safe(settings.bpjs_employee_jp))
+      : 0;
+  const bpjsCoJHT = basicOnlyMode
+    ? 0
+    : Math.round(basic * safe(settings.bpjs_company_jht));
+  const bpjsCoJKM = basicOnlyMode
+    ? 0
+    : Math.round(basic * safe(settings.bpjs_company_jkm));
+  const bpjsCoJKK = basicOnlyMode
+    ? 0
+    : Math.round(basic * safe(settings.bpjs_company_jkk));
+  const bpjsCoJP =
+    !basicOnlyMode && emp.gets_bpjs_jp
+      ? Math.round(basic * safe(settings.bpjs_company_jp))
+      : 0;
+  const bpjsEmpKesehatan =
+    !basicOnlyMode && emp.gets_bpjs_kesehatan
+      ? Math.round(basic * safe(settings.bpjs_employee_kesehatan))
+      : 0;
+  const bpjsCoKesehatan =
+    !basicOnlyMode && emp.gets_bpjs_kesehatan
+      ? Math.round(basic * safe(settings.bpjs_company_kesehatan))
+      : 0;
 
   const loanBalance = safe(emp.cash_loan_balance_idr);
-  const loanRepayment = safe(input.loan_repayment);
-  const newLoan = safe(input.new_loan);
+  const loanRepayment = basicOnlyMode ? 0 : safe(input.loan_repayment);
+  const newLoan = basicOnlyMode ? 0 : safe(input.new_loan);
   const projectedLoanBalance = loanBalance - loanRepayment + newLoan;
 
   const otherItems = input.other_items ?? [];
@@ -305,7 +327,7 @@ function computeRow(
     .reduce((acc, i) => acc + safe(i.amount_idr), 0); // stays negative
   const otherAdjustment = otherPositive + otherNegative; // net, unchanged formula below
 
-  const tax = safe(input.tax_idr); // NEW
+  const tax = basicOnlyMode ? 0 : safe(input.tax_idr); // NEW
 
   // NEW: the single reconciled "total deductions" figure — every strictly-
   // subtracted item, nothing double-counted. This is what the Pay Summary
@@ -795,7 +817,7 @@ function PayrollFormPageInner() {
         supabase
           .from("employees")
           .select(
-            "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, end_date, employment_status, active, basic, probation, position_id, skill_grade_id, gets_bpjs_jp, gets_bpjs_kesehatan, gets_attendance_reward, cash_loan_balance_idr, housing_allowance_idr, gets_meal_allowance, meal_allowance_override_idr, thr_preference, positions:positions!employees_position_id_fkey(id, name, allowance_idr), skill_grades:skill_grades!employees_skill_grade_id_fkey(id, level, increase_monthly_idr), seniority_grades:seniority_grades!employees_seniority_grade_id_fkey(id, grade, increase_monthly_idr)",
+            "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, end_date, employment_status, active, basic, probation, position_id, skill_grade_id, gets_bpjs_jp, gets_bpjs_kesehatan, gets_attendance_reward, cash_loan_balance_idr, housing_allowance_idr, gets_meal_allowance, meal_allowance_override_idr, basic_salary_only, thr_preference, positions:positions!employees_position_id_fkey(id, name, allowance_idr), skill_grades:skill_grades!employees_skill_grade_id_fkey(id, level, increase_monthly_idr), seniority_grades:seniority_grades!employees_seniority_grade_id_fkey(id, grade, increase_monthly_idr)",
           )
           .order("internal_no", { ascending: true })
           .limit(500),
@@ -2060,7 +2082,7 @@ function PayrollFormPageInner() {
                       return (
                         <tr
                           key={emp.uuid}
-                          className="hover:bg-[var(--ikkimo-surface,#fafafa)]"
+                          className={`hover:bg-[var(--ikkimo-surface,#fafafa)] ${emp.basic_salary_only ? "opacity-50" : ""}`}
                         >
                           <EmpCell emp={emp} />
                           {/* Days worked — read-only, computed from period working days minus absences */}
@@ -2075,7 +2097,7 @@ function PayrollFormPageInner() {
                               onChange={(v) =>
                                 updateInput(emp.uuid, "excused_full_days", v)
                               }
-                              disabled={isSubmitted}
+                              disabled={isSubmitted || !!emp.basic_salary_only}
                             />
                           </td>
                           <td className="px-3 py-2 text-center">
@@ -2084,7 +2106,7 @@ function PayrollFormPageInner() {
                               onChange={(v) =>
                                 updateInput(emp.uuid, "excused_half_days", v)
                               }
-                              disabled={isSubmitted}
+                              disabled={isSubmitted || !!emp.basic_salary_only}
                             />
                           </td>
                           <td className="border-l border-[var(--ikkimo-border)] px-3 py-2 text-center">
@@ -2093,7 +2115,7 @@ function PayrollFormPageInner() {
                               onChange={(v) =>
                                 updateInput(emp.uuid, "unexcused_full_days", v)
                               }
-                              disabled={isSubmitted}
+                              disabled={isSubmitted || !!emp.basic_salary_only}
                             />
                           </td>
                           <td className="px-3 py-2 text-center">
@@ -2102,7 +2124,7 @@ function PayrollFormPageInner() {
                               onChange={(v) =>
                                 updateInput(emp.uuid, "unexcused_half_days", v)
                               }
-                              disabled={isSubmitted}
+                              disabled={isSubmitted || !!emp.basic_salary_only}
                             />
                           </td>
                           <td className="border-l border-[var(--ikkimo-border)] px-3 py-2 text-center">
@@ -2111,7 +2133,7 @@ function PayrollFormPageInner() {
                               onChange={(v) =>
                                 updateInput(emp.uuid, "late_minutes_count", v)
                               }
-                              disabled={isSubmitted}
+                              disabled={isSubmitted || !!emp.basic_salary_only}
                             />
                           </td>
                         </tr>
@@ -2150,7 +2172,7 @@ function PayrollFormPageInner() {
                       return (
                         <tr
                           key={row.employee.uuid}
-                          className="hover:bg-[var(--ikkimo-surface,#fafafa)]"
+                          className={`hover:bg-[var(--ikkimo-surface,#fafafa)] ${row.employee.basic_salary_only ? "opacity-50" : ""}`}
                         >
                           <EmpCell emp={row.employee} />
                           <Td right muted={row.loan_balance === 0}>
@@ -2170,7 +2192,7 @@ function PayrollFormPageInner() {
                               }
                               step={10000}
                               wide
-                              disabled={isSubmitted}
+                              disabled={isSubmitted || !!row.employee.basic_salary_only}
                             />
                           </td>
                           <td className="px-3 py-2 text-right">
@@ -2181,7 +2203,7 @@ function PayrollFormPageInner() {
                               }
                               step={10000}
                               wide
-                              disabled={isSubmitted}
+                              disabled={isSubmitted || !!row.employee.basic_salary_only}
                             />
                           </td>
                           <Td
@@ -2228,7 +2250,7 @@ function PayrollFormPageInner() {
                       return (
                         <tr
                           key={emp.uuid}
-                          className="hover:bg-[var(--ikkimo-surface,#fafafa)]"
+                          className={`hover:bg-[var(--ikkimo-surface,#fafafa)] ${emp.basic_salary_only ? "opacity-50" : ""}`}
                         >
                           <EmpCell emp={emp} />
                           <td className="px-3 py-2 text-center">
@@ -2237,7 +2259,7 @@ function PayrollFormPageInner() {
                               onChange={(v) =>
                                 updateInput(emp.uuid, "overtime_hours_1", v)
                               }
-                              disabled={isSubmitted}
+                              disabled={isSubmitted || !!emp.basic_salary_only}
                             />
                           </td>
                           <td className="px-3 py-2 text-center">
@@ -2246,7 +2268,7 @@ function PayrollFormPageInner() {
                               onChange={(v) =>
                                 updateInput(emp.uuid, "overtime_hours_2", v)
                               }
-                              disabled={isSubmitted}
+                              disabled={isSubmitted || !!emp.basic_salary_only}
                             />
                           </td>
                           <td className="px-3 py-2 text-center">
@@ -2255,7 +2277,7 @@ function PayrollFormPageInner() {
                               onChange={(v) =>
                                 updateInput(emp.uuid, "overtime_hours_3", v)
                               }
-                              disabled={isSubmitted}
+                              disabled={isSubmitted || !!emp.basic_salary_only}
                             />
                           </td>
                         </tr>
@@ -2301,7 +2323,7 @@ function PayrollFormPageInner() {
                               step={10000}
                               min={0}
                               wide
-                              disabled={isSubmitted}
+                              disabled={isSubmitted || !!emp.basic_salary_only}
                             />
                           </td>
                           <td className="px-3 py-2">
@@ -2473,7 +2495,7 @@ function PayrollFormPageInner() {
                       {payrollRows.map((row) => (
                         <tr
                           key={row.employee.uuid}
-                          className="hover:bg-[var(--ikkimo-surface,#fafafa)]"
+                          className={`hover:bg-[var(--ikkimo-surface,#fafafa)] ${row.employee.basic_salary_only ? "opacity-50" : ""}`}
                         >
                           <EmpCell emp={row.employee} />
                           <Td right>{formatIDR(row.main_salary)}</Td>

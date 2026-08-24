@@ -31,6 +31,7 @@ type EditableEmployee = BasicEmployeeRow & {
   gets_bpjs_kesehatan?: boolean;
   gets_meal_allowance?: boolean;
   meal_allowance_override_idr?: number | null;
+  basic_salary_only?: boolean;
   gets_attendance_reward?: boolean;
   end_date?: string | null;
   employment_status?: "active" | "resigned" | "terminated" | null;
@@ -132,7 +133,7 @@ export default function EmployeePage() {
         supabase
           .from("employees")
           .select(
-            "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, gets_bpjs_jp, gets_bpjs_kesehatan, gets_meal_allowance, meal_allowance_override_idr, gets_attendance_reward, thr_preference, cash_loan_balance_idr, housing_allowance_idr, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name), end_date, employment_status",
+            "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, gets_bpjs_jp, gets_bpjs_kesehatan, gets_meal_allowance, meal_allowance_override_idr, basic_salary_only, gets_attendance_reward, thr_preference, cash_loan_balance_idr, housing_allowance_idr, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name), end_date, employment_status",
           )          
           .eq("uuid", uuid)
           .maybeSingle(),
@@ -283,6 +284,7 @@ export default function EmployeePage() {
       gets_bpjs_kesehatan: employee.gets_bpjs_kesehatan,
       gets_meal_allowance: employee.gets_meal_allowance,
       meal_allowance_override_idr: employee.meal_allowance_override_idr ?? null,
+      basic_salary_only: employee.basic_salary_only ?? false,
       gets_attendance_reward: employee.gets_attendance_reward,
       housing_allowance_idr: employee.housing_allowance_idr ?? 0,
       // Do NOT update probation here!
@@ -293,7 +295,7 @@ export default function EmployeePage() {
       .update(payload)
       .eq("uuid", employee.uuid)
       .select(
-              "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, housing_allowance_idr, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name), gets_bpjs_jp, gets_bpjs_kesehatan, gets_meal_allowance, meal_allowance_override_idr, gets_attendance_reward, end_date, employment_status",
+              "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, active, probation, basic, fingerprint_id, skill_grade_id, position_id, housing_allowance_idr, seniority_grades(id, grade, increase_monthly_idr), skill_grades(id, position_id, level, increase_monthly_idr), positions(id, name), gets_bpjs_jp, gets_bpjs_kesehatan, gets_meal_allowance, meal_allowance_override_idr, basic_salary_only, gets_attendance_reward, end_date, employment_status",
       )
       .maybeSingle();
 
@@ -999,6 +1001,35 @@ export default function EmployeePage() {
                     </span>
                   </label>
                 )}
+              </div>
+
+              {/* Basic salary only */}
+              <div>
+                <div className="text-xs font-semibold">
+                  Basic salary only
+                </div>
+                {!editing ? (
+                  <div className="mt-1 text-sm text-gray-500">
+                    {employee.basic_salary_only ? "Yes" : "No"}
+                  </div>
+                ) : (
+                  <label className="mt-1 inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={employee.basic_salary_only ?? false}
+                      onChange={(e) =>
+                        updateEmployee("basic_salary_only", e.target.checked)
+                      }
+                      className="rounded border-[var(--ikkimo-border)] bg-white text-[var(--ikkimo-brand)]"
+                    />
+                    <span className="text-sm">
+                      {employee.basic_salary_only ? "Yes" : "No"}
+                    </span>
+                  </label>
+                )}
+                <p className="mt-1 text-xs text-[var(--ikkimo-text-muted,#aaa)]">
+                  Overrides all pay components except basic salary and manual &quot;Other&quot; adjustments. No BPJS, allowances, overtime, or deductions.
+                </p>
               </div>
 
               {/* Cash Loan Balance */}
