@@ -731,6 +731,11 @@ function PayrollFormPageInner() {
   const [resetError, setResetError] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
 
+  const [showUnlockModal, setShowUnlockModal] = useState(false);
+  const [unlockPassword, setUnlockPassword] = useState("");
+  const [unlockError, setUnlockError] = useState<string | null>(null);
+  const [unlocking, setUnlocking] = useState(false);
+
   const [period, setPeriod] = useState<PayrollPeriod | null>(null);
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>("none");
   const [employees, setEmployees] = useState<EmployeeForPayroll[]>([]);
@@ -1405,6 +1410,54 @@ function PayrollFormPageInner() {
     await handleResetSession();
   }
 
+  // ---------------------------------------------------------------------------
+  // Unlock (undo submit) — flips a submitted period back to draft so it can
+  // be edited again. Entries are untouched; only payroll_periods.locked
+  // changes. Any previously generated spreadsheet/payslips in Storage are
+  // left as-is and will simply be overwritten the next time this period is
+  // submitted again.
+  // ---------------------------------------------------------------------------
+  async function handleUnlock() {
+    if (!period) return;
+    setUnlockError(null);
+
+    const result = await verifyCurrentUserPassword(unlockPassword);
+    if (!result.ok) {
+      setUnlockError(result.error);
+      return;
+    }
+
+    setUnlocking(true);
+
+    const { data: unlockedRows, error: unlockErr } = await supabase
+      .from("payroll_periods")
+      .update({ locked: false })
+      .eq("id", period.id)
+      .select("id, locked");
+
+    setUnlocking(false);
+
+    if (unlockErr) {
+      setUnlockError(unlockErr.message);
+      return;
+    }
+
+    if (!unlockedRows || unlockedRows.length === 0) {
+      // RLS silently blocked it — no error, but nothing changed.
+      setUnlockError(
+        "You don't have permission to unlock this payroll period. Contact an admin.",
+      );
+      return;
+    }
+
+    setSessionStatus("draft");
+    setPeriod((p) => (p ? { ...p, locked: false } : p));
+    setShowUnlockModal(false);
+    setUnlockPassword("");
+    setSaveMsg("Unlocked — you can edit again");
+    setTimeout(() => setSaveMsg(null), 3000);
+  }
+
   async function handleDownloadAll() {
     if (!period) return;
     setDownloadAllError(null);
@@ -1545,6 +1598,78 @@ function PayrollFormPageInner() {
         </div>
       )}
 
+      {/* Unlock confirmation modal */}
+      {showUnlockModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <button
+            className="absolute inset-0 bg-black/30"
+            aria-label="Close"
+            onClick={() => {
+              setShowUnlockModal(false);
+              setUnlockPassword("");
+              setUnlockError(null);
+            }}
+          />
+          <div className="relative w-full max-w-md rounded-2xl border border-[var(--ikkimo-border)] bg-white p-6 shadow-lg">
+            <div className="text-lg font-semibold">Unlock payroll?</div>
+            <div className="mt-2 text-sm text-[var(--ikkimo-text-muted,#666)]">
+              This will reopen {monthName(selectedMonth)} {selectedYear} for editing.
+              All previously entered data stays as-is — you&apos;ll just be able to
+              change it again. Any spreadsheet or payslips already generated will
+              be replaced next time you submit.
+            </div>
+
+            <div className="mt-4 rounded-xl border border-[var(--ikkimo-border)] p-4">
+              <div className="text-xs font-semibold">
+                Confirm with your password
+              </div>
+              <input
+                type="password"
+                value={unlockPassword}
+                onChange={(e) => {
+                  setUnlockPassword(e.target.value);
+                  setUnlockError(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleUnlock();
+                }}
+                placeholder="Password"
+                autoComplete="current-password"
+                className="mt-2 h-9 w-full rounded-xl border border-[var(--ikkimo-border)] px-3 text-sm outline-none focus:border-[var(--ikkimo-brand)]"
+              />
+            </div>
+
+            {unlockError && (
+              <p className="mt-2 text-xs text-red-600">{unlockError}</p>
+            )}
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowUnlockModal(false);
+                  setUnlockPassword("");
+                  setUnlockError(null);
+                }}
+                className="rounded-xl border border-[var(--ikkimo-border)] px-4 py-2 text-sm hover:border-[var(--ikkimo-brand)]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUnlock}
+                disabled={unlocking}
+                className="rounded-xl bg-[var(--ikkimo-brand)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                {unlocking ? "Unlocking…" : "Confirm unlock"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="rounded-2xl border border-[var(--ikkimo-border)] bg-white p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -1557,9 +1682,34 @@ function PayrollFormPageInner() {
                 </span>
               )}
               {sessionStatus === "submitted" && (
-                <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
-                  Submitted
-                </span>
+                <>
+                  <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                    Submitted
+                  </span>
+                  <button
+                    onClick={() => {
+                      setShowUnlockModal(true);
+                      setUnlockPassword("");
+                      setUnlockError(null);
+                    }}
+                    className="inline-flex items-center gap-1 rounded-full bg-amber-500 px-2.5 py-0.5 text-xs font-semibold text-white shadow-sm hover:bg-amber-600 active:bg-amber-700"
+                  >
+                    <svg
+                      width="11"
+                      height="11"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <rect x="4" y="11" width="16" height="10" rx="2" />
+                      <path d="M8 11V7a4 4 0 0 1 7.5-2" />
+                    </svg>
+                    Unlock &amp; edit
+                  </button>
+                </>
               )}
             </div>
             <div className="mt-0.5 text-sm text-[var(--ikkimo-text-muted,#666)]">
