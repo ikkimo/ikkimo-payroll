@@ -31,6 +31,7 @@ type EmployeeForPayroll = BasicEmployeeRow & {
   skill_grade_id?: string | null;
   gets_attendance_reward?: boolean | null;
   gets_bpjs_jp?: boolean | null;
+  gets_bpjs_kesehatan?: boolean | null;
   cash_loan_balance_idr?: number | null;
   positions?: { id: string; name: string; allowance_idr: number } | null;
   end_date?: string | null;
@@ -89,10 +90,12 @@ type PayrollRow = {
   total_deductions: number; // NEW — the one reconciled deductions figure
   bpjs_employee_jht: number;
   bpjs_employee_jp: number;
+  bpjs_employee_kesehatan: number;
   bpjs_company_jht: number;
   bpjs_company_jkm: number;
   bpjs_company_jkk: number;
   bpjs_company_jp: number;
+  bpjs_company_kesehatan: number;
   net_pay: number;
   company_bpjs_total: number;
 };
@@ -274,6 +277,12 @@ function computeRow(
   const bpjsCoJP = emp.gets_bpjs_jp
     ? Math.round(basic * safe(settings.bpjs_company_jp))
     : 0;
+  const bpjsEmpKesehatan = emp.gets_bpjs_kesehatan
+    ? Math.round(basic * safe(settings.bpjs_employee_kesehatan))
+    : 0;
+  const bpjsCoKesehatan = emp.gets_bpjs_kesehatan
+    ? Math.round(basic * safe(settings.bpjs_company_kesehatan))
+    : 0;
 
   const loanBalance = safe(emp.cash_loan_balance_idr);
   const loanRepayment = safe(input.loan_repayment);
@@ -299,6 +308,7 @@ function computeRow(
     latenessDeduction +
     bpjsEmpJHT +
     bpjsEmpJP +
+    bpjsEmpKesehatan +
     tax +
     loanRepayment;
 
@@ -307,7 +317,8 @@ function computeRow(
   const netPay = gross - totalDeductions + newLoan + otherAdjustment;
 
   const companyBpjsTotal =
-    bpjsCoJHT + bpjsCoJKM + bpjsCoJKK + bpjsCoJP + bpjsEmpJHT + bpjsEmpJP;
+    bpjsCoJHT + bpjsCoJKM + bpjsCoJKK + bpjsCoJP + bpjsCoKesehatan +
+    bpjsEmpJHT + bpjsEmpJP + bpjsEmpKesehatan;
 
   return {
     employee: emp,
@@ -335,10 +346,12 @@ function computeRow(
     total_deductions: totalDeductions,
     bpjs_employee_jht: bpjsEmpJHT,
     bpjs_employee_jp: bpjsEmpJP,
+    bpjs_employee_kesehatan: bpjsEmpKesehatan,
     bpjs_company_jht: bpjsCoJHT,
     bpjs_company_jkm: bpjsCoJKM,
     bpjs_company_jkk: bpjsCoJKK,
     bpjs_company_jp: bpjsCoJP,
+    bpjs_company_kesehatan: bpjsCoKesehatan,
     net_pay: netPay,
     company_bpjs_total: companyBpjsTotal,
   };
@@ -365,10 +378,12 @@ function sumRows(rows: PayrollRow[]) {
     total_deductions: sum("total_deductions"),
     bpjs_employee_jht: sum("bpjs_employee_jht"),
     bpjs_employee_jp: sum("bpjs_employee_jp"),
+    bpjs_employee_kesehatan: sum("bpjs_employee_kesehatan"),
     bpjs_company_jht: sum("bpjs_company_jht"),
     bpjs_company_jkm: sum("bpjs_company_jkm"),
     bpjs_company_jkk: sum("bpjs_company_jkk"),
     bpjs_company_jp: sum("bpjs_company_jp"),
+    bpjs_company_kesehatan: sum("bpjs_company_kesehatan"),
     net_pay: sum("net_pay"),
     company_bpjs_total: sum("company_bpjs_total"),
   };
@@ -572,6 +587,13 @@ function BreakdownCard({ row }: { row: PayrollRow }) {
                   red
                 />
               )}
+              {row.employee.gets_bpjs_kesehatan && (
+                <Line
+                  label="Emp. Kesehatan"
+                  value={`− ${formatIDR(row.bpjs_employee_kesehatan)}`}
+                  red
+                />
+              )}
               {row.tax > 0 && (
                 <Line label="Tax" value={`− ${formatIDR(row.tax)}`} red />
               )}
@@ -758,7 +780,7 @@ function PayrollFormPageInner() {
         supabase
           .from("employees")
           .select(
-            "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, end_date, employment_status, active, basic, probation, position_id, skill_grade_id, gets_bpjs_jp, gets_attendance_reward, cash_loan_balance_idr, housing_allowance_idr, gets_meal_allowance, thr_preference, positions:positions!employees_position_id_fkey(id, name, allowance_idr), skill_grades:skill_grades!employees_skill_grade_id_fkey(id, level, increase_monthly_idr), seniority_grades:seniority_grades!employees_seniority_grade_id_fkey(id, grade, increase_monthly_idr)",
+            "uuid, internal_no, employee_code, preferred_name, employee_name, department, start_date, end_date, employment_status, active, basic, probation, position_id, skill_grade_id, gets_bpjs_jp, gets_bpjs_kesehatan, gets_attendance_reward, cash_loan_balance_idr, housing_allowance_idr, gets_meal_allowance, thr_preference, positions:positions!employees_position_id_fkey(id, name, allowance_idr), skill_grades:skill_grades!employees_skill_grade_id_fkey(id, level, increase_monthly_idr), seniority_grades:seniority_grades!employees_seniority_grade_id_fkey(id, grade, increase_monthly_idr)",
           )
           .order("internal_no", { ascending: true })
           .limit(500),
@@ -1112,10 +1134,12 @@ function PayrollFormPageInner() {
         total_deductions_idr: row?.total_deductions ?? 0,
         bpjs_employee_jht_idr: row?.bpjs_employee_jht ?? 0,
         bpjs_employee_jp_idr: row?.bpjs_employee_jp ?? 0,
+        bpjs_employee_kesehatan_idr: row?.bpjs_employee_kesehatan ?? 0,
         bpjs_company_jht_idr: row?.bpjs_company_jht ?? 0,
         bpjs_company_jkm_idr: row?.bpjs_company_jkm ?? 0,
         bpjs_company_jkk_idr: row?.bpjs_company_jkk ?? 0,
         bpjs_company_jp_idr: row?.bpjs_company_jp ?? 0,
+        bpjs_company_kesehatan_idr: row?.bpjs_company_kesehatan ?? 0,
         company_bpjs_total_idr: row?.company_bpjs_total ?? 0,
         loan_balance_before_idr: row?.loan_balance ?? 0,
         loan_balance_after_idr: row?.projected_loan_balance ?? 0,
@@ -2213,9 +2237,9 @@ function PayrollFormPageInner() {
                 <SummaryTile
                   label="Total employee BPJS deductions"
                   value={formatIDR(
-                    totals.bpjs_employee_jht + totals.bpjs_employee_jp,
+                    totals.bpjs_employee_jht + totals.bpjs_employee_jp + totals.bpjs_employee_kesehatan,
                   )}
-                  hint="JHT + JP — deducted from employee net pay"
+                  hint="JHT + JP + Kesehatan — deducted from employee net pay"
                 />
                 <SummaryTile
                   label="Total company BPJS liability"
@@ -2243,10 +2267,12 @@ function PayrollFormPageInner() {
                         <Th right>Main salary</Th>
                         <Th right>Emp. JHT</Th>
                         <Th right>Emp. JP</Th>
+                        <Th right>Emp. Kesehatan</Th>
                         <Th right>Co. JHT</Th>
                         <Th right>Co. JKM</Th>
                         <Th right>Co. JKK</Th>
                         <Th right>Co. JP</Th>
+                        <Th right>Co. Kesehatan</Th>
                         <Th right>Co. total</Th>
                       </tr>
                     </thead>
@@ -2264,12 +2290,22 @@ function PayrollFormPageInner() {
                               ? formatIDR(row.bpjs_employee_jp)
                               : "—"}
                           </Td>
+                          <Td right muted={!row.employee.gets_bpjs_kesehatan}>
+                            {row.employee.gets_bpjs_kesehatan
+                              ? formatIDR(row.bpjs_employee_kesehatan)
+                              : "—"}
+                          </Td>
                           <Td right>{formatIDR(row.bpjs_company_jht)}</Td>
                           <Td right>{formatIDR(row.bpjs_company_jkm)}</Td>
                           <Td right>{formatIDR(row.bpjs_company_jkk)}</Td>
                           <Td right muted={!row.employee.gets_bpjs_jp}>
                             {row.employee.gets_bpjs_jp
                               ? formatIDR(row.bpjs_company_jp)
+                              : "—"}
+                          </Td>
+                          <Td right muted={!row.employee.gets_bpjs_kesehatan}>
+                            {row.employee.gets_bpjs_kesehatan
+                              ? formatIDR(row.bpjs_company_kesehatan)
                               : "—"}
                           </Td>
                           <Td right>
@@ -2284,10 +2320,12 @@ function PayrollFormPageInner() {
                         <Td right>{formatIDR(totals.main_salary)}</Td>
                         <Td right>{formatIDR(totals.bpjs_employee_jht)}</Td>
                         <Td right>{formatIDR(totals.bpjs_employee_jp)}</Td>
+                        <Td right>{formatIDR(totals.bpjs_employee_kesehatan)}</Td>
                         <Td right>{formatIDR(totals.bpjs_company_jht)}</Td>
                         <Td right>{formatIDR(totals.bpjs_company_jkm)}</Td>
                         <Td right>{formatIDR(totals.bpjs_company_jkk)}</Td>
                         <Td right>{formatIDR(totals.bpjs_company_jp)}</Td>
+                        <Td right>{formatIDR(totals.bpjs_company_kesehatan)}</Td>
                         <Td right>
                           <span className="font-bold">
                             {formatIDR(totals.company_bpjs_total)}
