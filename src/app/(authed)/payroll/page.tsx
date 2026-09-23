@@ -192,6 +192,10 @@ function computeRow(
   // eligibility follow the period-specific working days.
   const stdDays = safe(settings.standard_working_days) || 21;
   const basicOnlyMode = emp.basic_salary_only === true;
+  // Company-covered BPJS stops the moment an employee leaves — this is
+  // true both for their final month and for the residual grace month
+  // (periodEmployees already limits inactive employees to those two).
+  const isTerminated = Boolean(emp.end_date);
   const basic = safe(emp.basic);
   const positionAllowance = basicOnlyMode ? 0 : safe(emp.positions?.allowance_idr);
   const skillGradeIncrease = basicOnlyMode
@@ -291,17 +295,17 @@ function computeRow(
     !basicOnlyMode && emp.gets_bpjs_jp
       ? Math.round(basic * safe(settings.bpjs_employee_jp))
       : 0;
-  const bpjsCoJHT = basicOnlyMode
+  const bpjsCoJHT = basicOnlyMode || isTerminated
     ? 0
     : Math.round(basic * safe(settings.bpjs_company_jht));
-  const bpjsCoJKM = basicOnlyMode
+  const bpjsCoJKM = basicOnlyMode || isTerminated
     ? 0
     : Math.round(basic * safe(settings.bpjs_company_jkm));
-  const bpjsCoJKK = basicOnlyMode
+  const bpjsCoJKK = basicOnlyMode || isTerminated
     ? 0
     : Math.round(basic * safe(settings.bpjs_company_jkk));
   const bpjsCoJP =
-    !basicOnlyMode && emp.gets_bpjs_jp
+    !basicOnlyMode && !isTerminated && emp.gets_bpjs_jp
       ? Math.round(basic * safe(settings.bpjs_company_jp))
       : 0;
   const bpjsEmpKesehatan =
@@ -309,7 +313,7 @@ function computeRow(
       ? Math.round(basic * safe(settings.bpjs_employee_kesehatan))
       : 0;
   const bpjsCoKesehatan =
-    !basicOnlyMode && emp.gets_bpjs_kesehatan
+    !basicOnlyMode && !isTerminated && emp.gets_bpjs_kesehatan
       ? Math.round(basic * safe(settings.bpjs_company_kesehatan))
       : 0;
 
